@@ -1,0 +1,172 @@
+# EndpointGuard
+
+Active security for ASP.NET Core APIs. EndpointGuard records what each endpoint does when it handles legal
+requests. In production it blocks every request that makes an endpoint do something else.
+
+It does not look for known attack patterns. It only knows the legal behavior, so it also stops attacks and
+bugs that nobody has seen before, as long as they change what the endpoint touches.
+
+> Status: MVP. It targets .NET 11 and covers EF Core and `IHttpClientFactory`. Read [Limits](#limits) before you use it.
+
+## How it works
+
+1. **Record.** Your tests send one legal request per legal path. In `Learn` mode the guard writes down every
+   resource access of each endpoint. The result is the *profile*, a JSON file.
+2. **Review.** You commit the profile. When an endpoint starts to touch something new, the profile diff shows it
+   in the pull request.
+3. **Enforce.** In production the guard checks each access *before* it runs. An access that is not in the
+   profile never runs. The request gets a 403 and an alert is raised.
+
+An access is one of:
+
+| Kind | What is recorded | Example |
+|---|---|---|
+| `sql` | The statement shape: the SQL text with all literals and parameters replaced by `?` | `SELECT * FROM Products WHERE Name LIKE ?` |
+| `http` | Method, scheme, host and port of an outbound call | `GET https://hooks.example.com` |
+
+A profile looks like this (see the full one in [samples/SampleApi/endpointguard.profile.json](samples/SampleApi/endpointguard.profile.json)):
+
+```json
+{
+  "GET /products/search": [
+    "sql: SELECT * FROM Products WHERE Name LIKE ?"
+  ],
+  "POST /orders": [
+    "http: POST https://payments.example.com",
+    "sql: INSERT INTO \"Orders\" (\"Total\", \"UserId\") VALUES (?) RETURNING \"Id\""
+  ]
+}
+```
+
+## Quick start
+
+```csharp
+using EndpointGuard;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// 1. Register the guard. This also covers all IHttpClientFactory clients.
+builder.Services.AddEndpointGuard(options => builder.Configuration.GetSection("EndpointGuard").Bind(options));
+
+// 2. Let the guard check the commands of your DbContext.
+builder.Services.AddDbContext<ShopDb>((services, options) => options
+    .UseSqlite(connectionString)
+    .UseEndpointGuard(services));
+
+var app = builder.Build();
+
+// 3. Add the middleware after routing and before the endpoints.
+app.UseEndpointGuard();
+```
+
+```json
+"EndpointGuard": {
+  "Mode": "Enforce",
+  "ProfilePath": "endpointguard.profile.json"
+}
+```
+
+## Modes
+
+| Mode | Access that is not in the profile |
+|---|---|
+| `Off` | Not checked |
+| `Learn` | Added to the profile. The profile is saved when the host stops |
+| `Audit` | Reported, but allowed. This is the default |
+| `Enforce` | Reported and blocked. The response is 403 with an empty body |
+
+Recommended rollout: record with tests, run `Audit` in production until the alerts stay quiet, then switch to `Enforce`.
+
+In `Enforce` mode an endpoint that has no profile cannot touch anything.
+
+## Record the profile from tests
+
+The profile comes from your integration tests, not from manual use. The test project in this repository shows the pattern:
+
+- [`LegalRequests`](tests/EndpointGuard.Tests/LegalRequests.cs) lists one legal request per legal path.
+- [`ProfileFixture`](tests/EndpointGuard.Tests/ProfileFixture.cs) deletes the old profile, replays the legal
+  requests in `Learn` mode and saves the new profile. This happens on every test run.
+- The same requests must then pass in `Enforce` mode.
+- `EndpointCoverage.FindUnprofiled` returns the endpoints that have no profile, so a test can fail the build.
+
+One request per endpoint is not enough. Each legal path that touches different resources needs its own
+request. For example, `GET /products?sort=Price` and `GET /products?sort=Name` give two SQL shapes.
+
+## Alerts
+
+Every violation goes to all registered `IViolationSink` services. The default sink writes a log warning.
+Add your own sink to send alerts to another system:
+
+```csharp
+public sealed class PagerSink : IViolationSink
+{
+    public void Report(GuardViolation violation) { /* violation.Endpoint, violation.Access, violation.Blocked */ }
+}
+
+builder.Services.AddSingleton<IViolationSink, PagerSink>();
+```
+
+## What the sample shows
+
+[samples/SampleApi](samples/SampleApi) is a small shop API with deliberate weaknesses. The tests run each
+attack twice: with the guard off, to show the harm, and in `Enforce` mode, to show that it is stopped.
+
+| Weakness | Attack | Harm without the guard | What the guard sees |
+|---|---|---|---|
+| SQL injection in a string | `UNION SELECT ... FROM Users` | User emails leak | New SQL shape |
+| SQL injection in a string | `'; DELETE FROM Users; --` | All users are deleted | A second statement |
+| SQL injection in login | `alice@example.com' --` | Login without the password | New SQL shape |
+| SQL injection in `ORDER BY` | `CASE WHEN (SELECT ...) THEN Name ELSE Price END` | One bit of the `Users` table leaks per request | New SQL shape |
+| Mass assignment | `PATCH /users/1` with `"IsAdmin": true` | The user becomes an admin | `UPDATE` sets a new column |
+| Plain bug | `DELETE /orders/0` | Every order is deleted | `DELETE` without `WHERE` |
+| Forgotten debug switch | `GET /orders/1?debug=true` | Passwords leak | The endpoint reads a new table |
+| SSRF | `url=http://169.254.169.254/...` | The server calls an internal address | New outbound host |
+| SSRF | Other port on a legal host | The server calls an internal service | New outbound port |
+| Compromised dependency | An order with a high total | The order is copied to a foreign host | New outbound host |
+
+Two attacks are **not** stopped. [`KnownLimitTests`](tests/EndpointGuard.Tests/KnownLimitTests.cs) keeps them visible:
+
+- **IDOR.** Reading the order of another user has the same SQL shape as a legal read.
+- **Injection that keeps the shape.** A `%` wildcard in a `LIKE` value changes the result, but not the statement.
+
+## Limits
+
+- **Attacks inside the profile pass.** Broken authorization, business logic errors, XSS and DoS do not change
+  what an endpoint touches.
+- **Only EF Core and `IHttpClientFactory` are covered.** Dapper, raw ADO.NET, a directly created `HttpClient`,
+  file access and process start are not checked.
+- **HTTP redirects are not checked.** A legal host that redirects to another host passes.
+- **Code outside a request is not checked**, for example startup code and background jobs.
+- **No request-wide rollback.** A blocked access never runs, but earlier writes of the same request stay,
+  unless the app uses its own transaction.
+- **The profile records what the code does, not what it should do.** If a legal request triggers a harmful
+  path during recording, that path becomes legal. Review the profile diff.
+- **Missing test coverage blocks legal traffic.** A legal path that no test covers gets a 403 in `Enforce` mode.
+- **The guard runs inside the app process.** An attacker with full code execution can turn it off.
+- **The SQL normalizer is a small scanner, not a parser.** It is tested with SQLite only.
+
+## Extension points
+
+| Interface | Purpose | Default |
+|---|---|---|
+| `IViolationSink` | Receives violations | `LoggingViolationSink` |
+| `IProfileStore` | Loads and saves the profile | `JsonFileProfileStore` |
+| `ISqlNormalizer` | Reduces SQL to its shape | `SqlNormalizer` |
+| `IAccessGuard` | Checks one access. Call it from your own code to guard other resources | `AccessGuard` |
+
+## Repository layout
+
+```
+src/EndpointGuard            The library
+samples/SampleApi            Shop API with deliberate weaknesses, plus its recorded profile
+tests/EndpointGuard.Tests    Unit tests, legal requests, attacks
+```
+
+## Build and test
+
+```
+dotnet test
+```
+
+The test run rewrites `samples/SampleApi/endpointguard.profile.json`. A diff in that file after a test run
+means the behavior of an endpoint changed.

@@ -1,0 +1,36 @@
+{
+  "DELETE /orders/{id:int}": [
+    "sql: DELETE FROM \"Orders\" AS \"o\" WHERE \"o\".\"Id\" = ?"
+  ],
+  "GET /health": [],
+  "GET /orders/{id:int}": [
+    "sql: SELECT \"o\".\"Id\", \"o\".\"Total\", \"o\".\"UserId\" FROM \"Orders\" AS \"o\" WHERE \"o\".\"Id\" = ? LIMIT ?"
+  ],
+  "GET /preview": [
+    "http: GET https://hooks.example.com"
+  ],
+  "GET /products": [
+    "sql: SELECT * FROM Products ORDER BY Name",
+    "sql: SELECT * FROM Products ORDER BY Price"
+  ],
+  "GET /products/search": [
+    "sql: SELECT * FROM Products WHERE Name LIKE ?"
+  ],
+  "GET /products/{id:int}": [
+    "sql: SELECT \"p\".\"Id\", \"p\".\"Name\", \"p\".\"Price\" FROM \"Products\" AS \"p\" WHERE \"p\".\"Id\" = ? LIMIT ?"
+  ],
+  "PATCH /users/{id:int}": [
+    "sql: SELECT \"u\".\"Id\", \"u\".\"DisplayName\", \"u\".\"Email\", \"u\".\"IsAdmin\", \"u\".\"Password\" FROM \"Users\" AS \"u\" WHERE \"u\".\"Id\" = ? LIMIT ?",
+    "sql: UPDATE \"Users\" SET \"DisplayName\" = ? WHERE \"Id\" = ? RETURNING ?"
+  ],
+  "POST /login": [
+    "sql: SELECT * FROM Users WHERE Email = ? AND Password = ?"
+  ],
+  "POST /orders": [
+    "http: POST https://payments.example.com",
+    "sql: INSERT INTO \"Orders\" (\"Total\", \"UserId\") VALUES (?) RETURNING \"Id\""
+  ],
+  "POST /products": [
+    "sql: INSERT INTO \"Products\" (\"Name\", \"Price\") VALUES (?) RETURNING \"Id\""
+  ]
+}
