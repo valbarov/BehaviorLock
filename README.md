@@ -1,6 +1,6 @@
-# EndpointGuard
+# BehaviorLock
 
-Active security for ASP.NET Core APIs. EndpointGuard records what each endpoint does when it handles legal
+Active security for ASP.NET Core APIs. BehaviorLock records what each endpoint does when it handles legal
 requests. In production it blocks every request that makes an endpoint do something else.
 
 It does not look for known attack patterns. It only knows the legal behavior, so it also stops attacks and
@@ -11,7 +11,8 @@ bugs that nobody has seen before, as long as they change what the endpoint touch
 ## How it works
 
 1. **Record.** Your tests send one legal request per legal path. In `Learn` mode the guard writes down every
-   resource access of each endpoint. The result is the *profile*, a JSON file.
+   resource access of each endpoint. The result is the *profile*, stored in `behavior.lock.json`.
+   It works like a package lock file, but it locks behavior instead of versions.
 2. **Review.** You commit the profile. When an endpoint starts to touch something new, the profile diff shows it
    in the pull request.
 3. **Enforce.** In production the guard checks each access *before* it runs. An access that is not in the
@@ -24,7 +25,7 @@ An access is one of:
 | `sql` | The statement shape: the SQL text with all literals and parameters replaced by `?` | `SELECT * FROM Products WHERE Name LIKE ?` |
 | `http` | Method, scheme, host and port of an outbound call | `GET https://hooks.example.com` |
 
-A profile looks like this (see the full one in [samples/SampleApi/endpointguard.profile.json](samples/SampleApi/endpointguard.profile.json)):
+A profile looks like this (see the full one in [samples/SampleApi/behavior.lock.json](samples/SampleApi/behavior.lock.json)):
 
 ```json
 {
@@ -41,28 +42,28 @@ A profile looks like this (see the full one in [samples/SampleApi/endpointguard.
 ## Quick start
 
 ```csharp
-using EndpointGuard;
+using BehaviorLock;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Register the guard. This also covers all IHttpClientFactory clients.
-builder.Services.AddEndpointGuard(options => builder.Configuration.GetSection("EndpointGuard").Bind(options));
+builder.Services.AddBehaviorLock(options => builder.Configuration.GetSection("BehaviorLock").Bind(options));
 
 // 2. Let the guard check the commands of your DbContext.
 builder.Services.AddDbContext<ShopDb>((services, options) => options
     .UseSqlite(connectionString)
-    .UseEndpointGuard(services));
+    .UseBehaviorLock(services));
 
 var app = builder.Build();
 
 // 3. Add the middleware after routing and before the endpoints.
-app.UseEndpointGuard();
+app.UseBehaviorLock();
 ```
 
 ```json
-"EndpointGuard": {
+"BehaviorLock": {
   "Mode": "Enforce",
-  "ProfilePath": "endpointguard.profile.json"
+  "ProfilePath": "behavior.lock.json"
 }
 ```
 
@@ -83,8 +84,8 @@ In `Enforce` mode an endpoint that has no profile cannot touch anything.
 
 The profile comes from your integration tests, not from manual use. The test project in this repository shows the pattern:
 
-- [`LegalRequests`](tests/EndpointGuard.Tests/LegalRequests.cs) lists one legal request per legal path.
-- [`ProfileFixture`](tests/EndpointGuard.Tests/ProfileFixture.cs) deletes the old profile, replays the legal
+- [`LegalRequests`](tests/BehaviorLock.Tests/LegalRequests.cs) lists one legal request per legal path.
+- [`ProfileFixture`](tests/BehaviorLock.Tests/ProfileFixture.cs) deletes the old profile, replays the legal
   requests in `Learn` mode and saves the new profile. This happens on every test run.
 - The same requests must then pass in `Enforce` mode.
 - `EndpointCoverage.FindUnprofiled` returns the endpoints that have no profile, so a test can fail the build.
@@ -124,7 +125,7 @@ attack twice: with the guard off, to show the harm, and in `Enforce` mode, to sh
 | SSRF | Other port on a legal host | The server calls an internal service | New outbound port |
 | Compromised dependency | An order with a high total | The order is copied to a foreign host | New outbound host |
 
-Two attacks are **not** stopped. [`KnownLimitTests`](tests/EndpointGuard.Tests/KnownLimitTests.cs) keeps them visible:
+Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/KnownLimitTests.cs) keeps them visible:
 
 - **IDOR.** Reading the order of another user has the same SQL shape as a legal read.
 - **Injection that keeps the shape.** A `%` wildcard in a `LIKE` value changes the result, but not the statement.
@@ -157,9 +158,9 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/EndpointGuard.Tests/K
 ## Repository layout
 
 ```
-src/EndpointGuard            The library
+src/BehaviorLock            The library
 samples/SampleApi            Shop API with deliberate weaknesses, plus its recorded profile
-tests/EndpointGuard.Tests    Unit tests, legal requests, attacks
+tests/BehaviorLock.Tests    Unit tests, legal requests, attacks
 ```
 
 ## Build and test
@@ -168,5 +169,5 @@ tests/EndpointGuard.Tests    Unit tests, legal requests, attacks
 dotnet test
 ```
 
-The test run rewrites `samples/SampleApi/endpointguard.profile.json`. A diff in that file after a test run
+The test run rewrites `samples/SampleApi/behavior.lock.json`. A diff in that file after a test run
 means the behavior of an endpoint changed.

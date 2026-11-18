@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/SampleApi/SampleApi.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/BehaviorLock/BehaviorLock.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BehaviorLock.Tests/BehaviorLock.Tests.csproj" />
+  </Folder>
+</Solution>
