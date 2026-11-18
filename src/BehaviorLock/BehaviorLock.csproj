@@ -6,6 +6,15 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <Authors>Vadim Albarov</Authors>
+    <Copyright>Copyright 2026 Vadim Albarov</Copyright>
+    <Description>Active security for ASP.NET Core APIs. Records what each endpoint touches and blocks everything else.</Description>
+    <PackageLicenseExpression>PolyForm-Noncommercial-1.0.0 OR PolyForm-Small-Business-1.0.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/valbarov/BehaviorLock</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/valbarov/BehaviorLock</RepositoryUrl>
+  </PropertyGroup>
+
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="11.0.0" />

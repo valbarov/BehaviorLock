@@ -171,3 +171,9 @@ dotnet test
 
 The test run rewrites `samples/SampleApi/behavior.lock.json`. A diff in that file after a test run
 means the behavior of an endpoint changed.
+
+## License
+
+BehaviorLock is source-available, not open source. It is free for noncommercial use and for small companies
+(fewer than 100 people and less than 1,000,000 USD revenue). Any other use needs a commercial license.
+See [LICENSE.md](LICENSE.md) for the exact terms.
