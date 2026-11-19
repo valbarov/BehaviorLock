@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/perf/">
+    <Project Path="perf/BehaviorLock.LoadTest/BehaviorLock.LoadTest.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/SampleApi/SampleApi.csproj" />
   </Folder>

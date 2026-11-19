@@ -23,11 +23,6 @@ using (var scope = app.Services.CreateScope())
 
 app.UseBehaviorLock();
 
-// Every endpoint group below has at least one deliberate weakness. See the README for the list.
-app.MapGet("/health", () => "ok");
-app.MapProductEndpoints();
-app.MapAccountEndpoints();
-app.MapOrderEndpoints();
-app.MapWebhookEndpoints();
+app.MapShopApi();
 
 app.Run();

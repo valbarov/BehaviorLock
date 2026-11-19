@@ -161,6 +161,7 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 src/BehaviorLock            The library
 samples/SampleApi            Shop API with deliberate weaknesses, plus its recorded profile
 tests/BehaviorLock.Tests    Unit tests, legal requests, attacks
+perf/BehaviorLock.LoadTest   Load test that compares the API with and without the guard
 ```
 
 ## Build and test
@@ -171,6 +172,44 @@ dotnet test
 
 The test run rewrites `samples/SampleApi/behavior.lock.json`. A diff in that file after a test run
 means the behavior of an endpoint changed.
+
+## Performance
+
+[perf/BehaviorLock.LoadTest](perf/BehaviorLock.LoadTest) measures what the guard costs. It starts the sample
+API four ways on real Kestrel ports (without the package, and in `Off`, `Audit` and `Enforce` mode) and
+sends the same load to each one.
+
+```
+dotnet run -c Release --project perf/BehaviorLock.LoadTest
+dotnet run -c Release --project perf/BehaviorLock.LoadTest -- --filter preview --rounds 8
+```
+
+Results from one machine (16 logical cores, Windows 11, .NET 11, local SQLite file, 16 connections,
+8 rounds of 4 s). Throughput in `Enforce` mode, compared with the same API without the package:
+
+| Scenario | Requests/s without the package | Change in `Enforce` mode |
+|---|---:|---|
+| No resource access | 215,000 | No difference found |
+| One EF Core query | 53,000 | About 2% to 3% lower |
+| One raw SQL query | 56,000 | Between 0% and 2% lower |
+| EF Core query + `UPDATE`, one connection | 1,200 | No clear difference (noise is ±4%) |
+| One outbound HTTP call | 213,000 | About 1% lower |
+| SQL injection, blocked with a 403 | 54,000 | About 2% higher: blocking costs less than running the attack query |
+
+The latency percentiles (p50, p95, p99) differ by 0.04 ms or less in every scenario.
+
+The guard's own work per SQL command is small: 0.1 to 0.5 µs to normalize the statement and 0.1 µs to check
+it, with about 770 bytes allocated.
+
+How to read these numbers:
+
+- A local SQLite file answers in about 0.2 ms. That makes the relative cost of the guard as high as it gets.
+  A database on the network is slower, so the same cost is a smaller share of the request.
+- `Off` mode costs about the same as `Enforce` mode for SQL, because the interceptor still normalizes each
+  statement before the guard looks at the mode.
+- The load client runs in the same process as the servers, and the machine speed changes during a run.
+  The test compares each variant with the baseline run of the same round to reduce that effect.
+  Differences below about 1% are not reliable.
 
 ## License
 
