@@ -80,6 +80,19 @@ Recommended rollout: record with tests, run `Audit` in production until the aler
 
 In `Enforce` mode an endpoint that has no profile cannot touch anything.
 
+## Deploy the profile
+
+The profile file must be deployed with the app. A relative `ProfilePath` is resolved against the content
+root of the app, the same directory that holds `appsettings.json`. The current directory is not used.
+
+A missing or empty profile allows nothing, so the guard makes it visible at startup:
+
+| Mode | Profile is missing or empty |
+|---|---|
+| `Enforce` | The app does not start. The error names the full path of the profile |
+| `Audit` | The app starts and logs a warning |
+| `Learn`, `Off` | The app starts |
+
 ## Record the profile from tests
 
 The profile comes from your integration tests, not from manual use. The test project in this repository shows the pattern:

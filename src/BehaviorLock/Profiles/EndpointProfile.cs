@@ -43,6 +43,18 @@ public sealed class EndpointProfile
         }
     }
 
+    /// <summary>The number of endpoints in the profile. Zero means that nothing was recorded or loaded.</summary>
+    public int EndpointCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _endpoints.Count;
+            }
+        }
+    }
+
     public bool ContainsEndpoint(string endpoint)
     {
         lock (_lock)

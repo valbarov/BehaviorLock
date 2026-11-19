@@ -19,6 +19,9 @@ public sealed class BehaviorLockOptions
 {
     public GuardMode Mode { get; set; } = GuardMode.Audit;
 
-    /// <summary>Path of the profile file. A relative path is resolved against the current directory.</summary>
+    /// <summary>
+    /// Path of the profile file. A relative path is resolved against the content root of the app,
+    /// the same directory that holds appsettings.json.
+    /// </summary>
     public string ProfilePath { get; set; } = "behavior.lock.json";
 }
