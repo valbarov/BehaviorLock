@@ -106,6 +106,46 @@ The profile comes from your integration tests, not from manual use. The test pro
 One request per endpoint is not enough. Each legal path that touches different resources needs its own
 request. For example, `GET /products?sort=Price` and `GET /products?sort=Name` give two SQL shapes.
 
+## Find the gaps in production
+
+Tests never cover every legal path. The pending file shows what they miss, before `Enforce` mode blocks a legal user.
+
+```json
+"BehaviorLock": {
+  "Mode": "Audit",
+  "ProfilePath": "behavior.lock.json",
+  "ApprovedPath": "behavior.lock.approved.json",
+  "PendingPath": "/var/lib/shop/behavior.lock.pending.json"
+}
+```
+
+1. **Collect.** In `Audit` and `Enforce` mode the guard writes every access that is not in the profile to the
+   pending file. The file is written at most every 10 seconds, and when the host stops.
+2. **Review.** A person reads each entry. An entry is a legal path that the tests do not cover, or it is an
+   attack. Do not accept an entry that you cannot explain.
+3. **Accept.** For a legal entry, add a legal request to the tests. The entry then moves into the recorded
+   profile. When a test is not possible soon, copy the entry to the approved file.
+4. **Deploy.** Commit the change, so the pull request shows it. The guard allows the accesses of the profile
+   and of the approved file. Entries that are allowed now leave the pending file at the next start.
+
+The three files have the same format:
+
+| File | Written by | In git | Content |
+|---|---|---|---|
+| `ProfilePath` | The tests, in `Learn` mode | Yes | What the code does on the tested paths |
+| `ApprovedPath` | A person | Yes | Reviewed accesses that no test covers |
+| `PendingPath` | The guard, in production | No | Accesses that wait for a review |
+
+Things to know:
+
+- The pending file also collects attack attempts. It contains text that an attacker chose, for example SQL
+  comments. Never copy it to the approved file without a review.
+- The pending file holds at most `PendingLimit` accesses (default 1000), because each attack attempt can
+  give a new access. Accesses over the limit are still reported, but not written.
+- Each instance of the app writes its own pending file. Give each instance its own path.
+- `Learn` mode ignores the approved file, so the recording never copies approved accesses into the profile.
+- A missing approved file gives a warning at startup. The app starts, and only the profile is used.
+
 ## Alerts
 
 Every violation goes to all registered `IViolationSink` services. The default sink writes a log warning.
@@ -156,6 +196,7 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 - **The profile records what the code does, not what it should do.** If a legal request triggers a harmful
   path during recording, that path becomes legal. Review the profile diff.
 - **Missing test coverage blocks legal traffic.** A legal path that no test covers gets a 403 in `Enforce` mode.
+  Run `Audit` mode with a pending file first; see [Find the gaps in production](#find-the-gaps-in-production).
 - **The guard runs inside the app process.** An attacker with full code execution can turn it off.
 - **The SQL normalizer is a small scanner, not a parser.** It is tested with SQLite only.
 

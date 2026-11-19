@@ -20,13 +20,25 @@ public static class BehaviorLockExtensions
 
         services.TryAddSingleton<IGuardContextAccessor, GuardContextAccessor>();
         services.TryAddSingleton<IProfileStore, JsonFileProfileStore>();
-        services.TryAddSingleton(provider => provider.GetRequiredService<IProfileStore>().Load());
+        services.TryAddSingleton<ApprovedAccesses>();
+        services.TryAddSingleton(provider =>
+        {
+            var profile = provider.GetRequiredService<IProfileStore>().Load();
+            provider.GetRequiredService<ApprovedAccesses>().AddTo(profile);
+            return profile;
+        });
         services.TryAddSingleton<ISqlNormalizer, SqlNormalizer>();
         services.TryAddSingleton<IAccessGuard, AccessGuard>();
         services.TryAddSingleton<GuardDbCommandInterceptor>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IViolationSink, LoggingViolationSink>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHttpMessageHandlerBuilderFilter, GuardHttpHandlerFilter>());
         services.AddHostedService<ProfileLifecycle>();
+
+        // One instance collects the pending accesses as a sink and writes them as a hosted service.
+        services.TryAddSingleton<PendingAccesses>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IViolationSink, PendingAccesses>(
+            provider => provider.GetRequiredService<PendingAccesses>()));
+        services.AddHostedService(provider => provider.GetRequiredService<PendingAccesses>());
 
         return services;
     }

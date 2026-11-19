@@ -55,6 +55,54 @@ public sealed class EndpointProfile
         }
     }
 
+    /// <summary>The number of accesses of all endpoints together.</summary>
+    public int AccessCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _endpoints.Values.Sum(accesses => accesses.Count);
+            }
+        }
+    }
+
+    /// <summary>Adds all endpoints and accesses of the other profile. Returns the number of new accesses.</summary>
+    public int Merge(EndpointProfile other)
+    {
+        var source = other.ToDictionary();
+
+        lock (_lock)
+        {
+            var added = 0;
+            foreach (var (endpoint, accesses) in source)
+            {
+                var target = GetOrAdd(endpoint);
+                added += accesses.Count(target.Add);
+            }
+
+            return added;
+        }
+    }
+
+    /// <summary>Returns a new profile with the accesses of this profile that the other profile does not allow.</summary>
+    public EndpointProfile Except(EndpointProfile other)
+    {
+        var allowed = other.ToDictionary();
+        var rest = new Dictionary<string, string[]>(StringComparer.Ordinal);
+
+        foreach (var (endpoint, accesses) in ToDictionary())
+        {
+            var left = allowed.TryGetValue(endpoint, out var known) ? accesses.Except(known, StringComparer.Ordinal).ToArray() : accesses;
+            if (left.Length > 0)
+            {
+                rest[endpoint] = left;
+            }
+        }
+
+        return new EndpointProfile(rest);
+    }
+
     public bool ContainsEndpoint(string endpoint)
     {
         lock (_lock)

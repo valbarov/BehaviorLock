@@ -29,6 +29,12 @@ public sealed class GuardedApi : WebApplicationFactory<Program>
 
     public CollectingSink Violations { get; } = new();
 
+    /// <summary>Where the guard writes the accesses that are not in the profile. Null means no pending file.</summary>
+    public string? PendingPath { get; init; }
+
+    /// <summary>The file with reviewed accesses. Null means no approved file.</summary>
+    public string? ApprovedPath { get; init; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:Shop", _connectionString);
@@ -38,6 +44,8 @@ public sealed class GuardedApi : WebApplicationFactory<Program>
             {
                 options.Mode = _mode;
                 options.ProfilePath = _profilePath;
+                options.PendingPath = PendingPath;
+                options.ApprovedPath = ApprovedPath;
             });
             services.AddSingleton<IViolationSink>(Violations);
             services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => Outbound));
