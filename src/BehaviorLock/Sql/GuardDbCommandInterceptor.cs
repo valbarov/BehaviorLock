@@ -53,6 +53,12 @@ public sealed class GuardDbCommandInterceptor(IAccessGuard guard, ISqlNormalizer
 
     private void Check(DbCommand command)
     {
+        // Normalizing costs time and memory, so skip it when the guard would ignore the result.
+        if (!guard.IsActive)
+        {
+            return;
+        }
+
         foreach (var statement in normalizer.Normalize(command.CommandText))
         {
             guard.Check(ResourceAccess.Sql(statement));

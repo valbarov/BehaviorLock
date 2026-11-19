@@ -74,6 +74,16 @@ public sealed class AccessGuardTests
         Guard(mode).Check(Unknown);
 
         Assert.Empty(_sink.Items);
+        Assert.False(Guard(mode).IsActive);
+    }
+
+    [Theory]
+    [InlineData(GuardMode.Learn)]
+    [InlineData(GuardMode.Audit)]
+    [InlineData(GuardMode.Enforce)]
+    public void Guard_is_active_inside_a_request_in_every_mode_but_off(GuardMode mode)
+    {
+        Assert.True(Guard(mode).IsActive);
     }
 
     private AccessGuard Guard(GuardMode mode) =>

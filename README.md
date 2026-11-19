@@ -205,8 +205,8 @@ How to read these numbers:
 
 - A local SQLite file answers in about 0.2 ms. That makes the relative cost of the guard as high as it gets.
   A database on the network is slower, so the same cost is a smaller share of the request.
-- `Off` mode costs about the same as `Enforce` mode for SQL, because the interceptor still normalizes each
-  statement before the guard looks at the mode.
+- In `Off` mode, and for code outside a request, the guard skips its work: the SQL is not normalized and
+  the outbound call is not inspected. Only the call into the EF Core interceptor and the HTTP handler remains.
 - The load client runs in the same process as the servers, and the machine speed changes during a run.
   The test compares each variant with the baseline run of the same round to reduce that effect.
   Differences below about 1% are not reliable.

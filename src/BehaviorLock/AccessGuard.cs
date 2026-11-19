@@ -5,6 +5,12 @@ namespace BehaviorLock;
 public interface IAccessGuard
 {
     /// <summary>
+    /// False when <see cref="Check"/> would ignore every access: the mode is <see cref="GuardMode.Off"/>
+    /// or the code runs outside a guarded request. Callers can then skip the work of building the access.
+    /// </summary>
+    bool IsActive { get; }
+
+    /// <summary>
     /// Call this before a resource is touched.
     /// Throws <see cref="GuardViolationException"/> when the access must be blocked.
     /// </summary>
@@ -17,12 +23,14 @@ public sealed class AccessGuard(
     IEnumerable<IViolationSink> sinks,
     IOptions<BehaviorLockOptions> options) : IAccessGuard
 {
+    // No context means the access is outside a guarded request, for example startup code.
+    public bool IsActive => options.Value.Mode != GuardMode.Off && contextAccessor.Current is not null;
+
     public void Check(ResourceAccess access)
     {
         var mode = options.Value.Mode;
         var context = contextAccessor.Current;
 
-        // No context means the access is outside a guarded request, for example startup code.
         if (mode == GuardMode.Off || context is null)
         {
             return;
