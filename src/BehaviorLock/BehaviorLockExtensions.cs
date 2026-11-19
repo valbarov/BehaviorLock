@@ -29,6 +29,7 @@ public static class BehaviorLockExtensions
         });
         services.TryAddSingleton<ISqlNormalizer, SqlNormalizer>();
         services.TryAddSingleton<IAccessGuard, AccessGuard>();
+        services.TryAddSingleton<DatabaseCheck>();
         services.TryAddSingleton<GuardDbCommandInterceptor>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IViolationSink, LoggingViolationSink>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHttpMessageHandlerBuilderFilter, GuardHttpHandlerFilter>());

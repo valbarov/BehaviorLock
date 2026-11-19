@@ -4,6 +4,7 @@ namespace BehaviorLock;
 public sealed class EndpointProfile
 {
     private readonly Dictionary<string, HashSet<string>> _endpoints = new(StringComparer.Ordinal);
+    private readonly SortedSet<string> _databases = new(StringComparer.Ordinal);
     private readonly Lock _lock = new();
 
     public EndpointProfile()
@@ -15,6 +16,30 @@ public sealed class EndpointProfile
         foreach (var (endpoint, accesses) in endpoints)
         {
             _endpoints[endpoint] = new HashSet<string>(accesses, StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// The databases that the profile was recorded with, for example
+    /// <c>Microsoft.EntityFrameworkCore.Sqlite 11.0.0</c>. Empty when the recording made no SQL access.
+    /// A profile store must keep them with the profile. See <see cref="DatabaseCheck"/>.
+    /// </summary>
+    public IReadOnlyCollection<string> Databases
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _databases.ToArray();
+            }
+        }
+    }
+
+    public void AddDatabase(string database)
+    {
+        lock (_lock)
+        {
+            _databases.Add(database);
         }
     }
 
@@ -111,7 +136,7 @@ public sealed class EndpointProfile
         }
     }
 
-    /// <summary>A sorted copy, so that the saved file gives stable diffs.</summary>
+    /// <summary>The endpoints and their accesses as a sorted copy, so that the saved file gives stable diffs.</summary>
     public SortedDictionary<string, string[]> ToDictionary()
     {
         lock (_lock)

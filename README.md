@@ -35,6 +35,9 @@ A profile looks like this (see the full one in [samples/SampleApi/behavior.lock.
 
 ```json
 {
+  "$database": [
+    "Microsoft.EntityFrameworkCore.Sqlite 11.0.0"
+  ],
   "GET /products/search": [
     "sql: SELECT * FROM Products WHERE Name LIKE ?"
   ],
@@ -44,6 +47,9 @@ A profile looks like this (see the full one in [samples/SampleApi/behavior.lock.
   ]
 }
 ```
+
+The `$database` entry names the database provider that the profile was recorded with.
+See [Record with the database of production](#record-with-the-database-of-production).
 
 ## Quick start
 
@@ -142,6 +148,29 @@ A missing or empty profile allows nothing, so the guard makes it visible at star
 | `Enforce` | The app does not start. The error names the full path of the profile |
 | `Audit` | The app starts and logs a warning. It does not start when an endpoint has its own mode `Enforce` |
 | `Learn`, `Off` | The app starts |
+
+### Record with the database of production
+
+Each database provider writes its own SQL. A profile that was recorded with SQLite matches nothing on
+PostgreSQL or SQL Server. So `Learn` mode writes the provider and its version into the profile, and the
+other modes compare them with the provider that the app uses:
+
+| The app uses | `Enforce` | `Audit` |
+|---|---|---|
+| Another provider | The app does not start. The error names both providers | The app starts and logs an error |
+| Another version of the same provider | The app starts and logs a warning | The app starts and logs a warning |
+| The same provider and version | The app starts | The app starts |
+
+Run the recording tests against the database that production uses, for example in a container.
+A test database of another kind gives a profile that production cannot use.
+
+- The check at startup covers the contexts that are registered with `AddDbContext`. Any other context is
+  checked when its first command runs. A wrong provider there gives an error in the log, and its accesses
+  are reported or blocked like every unknown access.
+- With the global mode `Audit`, the app does not start when an endpoint has its own mode `Enforce` and the
+  provider is another one.
+- A profile without a `$database` entry is not checked. This is the case for a profile from an older
+  version, and for a recording that made no SQL access.
 
 ## Record the profile from tests
 
@@ -254,13 +283,15 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
   instances or copies entries to the approved file. Both steps are done by hand.
 - **The guard runs inside the app process.** An attacker with full code execution can turn it off.
 - **The SQL normalizer is a small scanner, not a parser.** It is tested with SQLite only.
+- **The database check compares the provider and its version only.** It does not see the version of the
+  database server or its settings, and both can change the SQL too.
 
 ## Extension points
 
 | Interface | Purpose | Default |
 |---|---|---|
 | `IViolationSink` | Receives violations | `LoggingViolationSink` |
-| `IProfileStore` | Loads and saves the recorded profile, and names its location | `JsonFileProfileStore` |
+| `IProfileStore` | Loads and saves the recorded profile with its `Databases`, and names its location | `JsonFileProfileStore` |
 | `ISqlNormalizer` | Reduces SQL to its shape | `SqlNormalizer` |
 | `IAccessGuard` | Checks one access. Call it from your own code to guard other resources | `AccessGuard` |
 | `IGuardModeMetadata` | Endpoint metadata that sets the mode of one endpoint | `BehaviorLockAttribute` |
@@ -323,21 +354,6 @@ How to read these numbers:
 - The load client runs in the same process as the servers, and the machine speed changes during a run.
   The test compares each variant with the baseline run of the same round to reduce that effect.
   Differences below about 1% are not reliable.
-
-## Recent changes
-
-2026-11-18:
-
-- **License.** BehaviorLock is now open source under Apache-2.0. Before, it was source-available.
-- **Profile path and startup check.** A relative `ProfilePath` is resolved against the content root, not
-  against the current directory. `Enforce` mode does not start with a missing or empty profile.
-  See [Deploy the profile](#deploy-the-profile).
-- **Pending and approved files.** The guard writes unknown accesses to a pending file, and it allows the
-  accesses of a reviewed approved file. See [Find the gaps in production](#find-the-gaps-in-production).
-- **Mode per endpoint.** `WithBehaviorLock(...)` and `[BehaviorLock(...)]` set the mode of one endpoint,
-  route group, controller or action. See [Mode per endpoint](#mode-per-endpoint).
-- **API changes.** `IProfileStore` has the new member `Location`. `JsonFileProfileStore` needs an
-  `IHostEnvironment`. `GuardContext` has the new property `Mode`.
 
 ## License
 

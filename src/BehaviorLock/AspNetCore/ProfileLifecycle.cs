@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -6,39 +7,44 @@ using Microsoft.Extensions.Options;
 namespace BehaviorLock;
 
 /// <summary>
-/// Logs the guard state on start and stops the start when Enforce mode has no profile.
+/// Logs the guard state on start. Stops the start when Enforce mode has no profile,
+/// or a profile that was recorded with another database provider.
 /// Saves the profile on shutdown in Learn mode.
 /// </summary>
 internal sealed class ProfileLifecycle(
     EndpointProfile profile,
     IProfileStore store,
     IEnumerable<EndpointDataSource> endpointSources,
+    DatabaseCheck databaseCheck,
+    IServiceScopeFactory scopes,
     IOptions<BehaviorLockOptions> options,
     ILogger<ProfileLifecycle> logger) : IHostedLifecycleService
 {
     private readonly Lock _saveLock = new();
     private bool _saved;
 
+    // Why no endpoint can run in Enforce mode with this profile. Null when nothing is wrong.
+    private string? _problem;
+
     public Task StartAsync(CancellationToken cancellationToken)
     {
         var mode = options.Value.Mode;
         var count = profile.EndpointCount;
 
-        // An empty profile allows nothing. Most often the file is missing or ProfilePath is wrong.
-        if (count == 0 && mode == GuardMode.Enforce)
+        if (mode != GuardMode.Off)
         {
-            throw new InvalidOperationException(
-                $"BehaviorLock mode is Enforce, but the profile at '{store.Location}' is missing or empty. " +
-                "Every request that touches a resource would be blocked. " +
-                "Record the profile in Learn mode and deploy the file with the app, or correct ProfilePath.");
+            _problem = FindProblem(mode);
         }
 
-        if (count == 0 && mode == GuardMode.Audit)
+        if (_problem is not null && mode == GuardMode.Enforce)
         {
-            logger.LogWarning(
-                "BehaviorLock mode is Audit, but the profile at {Location} is missing or empty. " +
-                "Every resource access will be reported as a violation",
-                store.Location);
+            throw new InvalidOperationException($"BehaviorLock mode is Enforce, but {_problem}");
+        }
+
+        // A wrong database provider is already in the log, as an error of the database check.
+        if (_problem is not null && mode == GuardMode.Audit && count == 0)
+        {
+            logger.LogWarning("BehaviorLock mode is Audit, but {Problem}", _problem);
         }
 
         logger.LogInformation(
@@ -55,12 +61,9 @@ internal sealed class ProfileLifecycle(
     /// </summary>
     public Task StartedAsync(CancellationToken cancellationToken)
     {
-        if (options.Value.Mode == GuardMode.Audit && profile.EndpointCount == 0 && FindEnforcedEndpoint() is { } endpoint)
+        if (options.Value.Mode == GuardMode.Audit && _problem is not null && FindEnforcedEndpoint() is { } endpoint)
         {
-            throw new InvalidOperationException(
-                $"BehaviorLock endpoint '{endpoint}' has the mode Enforce, but the profile at '{store.Location}' " +
-                "is missing or empty. Every access of this endpoint would be blocked. " +
-                "Record the profile in Learn mode and deploy the file with the app, or correct ProfilePath.");
+            throw new InvalidOperationException($"BehaviorLock endpoint '{endpoint}' has the mode Enforce, but {_problem}");
         }
 
         return Task.CompletedTask;
@@ -90,6 +93,28 @@ internal sealed class ProfileLifecycle(
         }
 
         return Task.CompletedTask;
+    }
+
+    private string? FindProblem(GuardMode mode)
+    {
+        // In Learn mode this call records the database. In the other modes it compares it.
+        var database = databaseCheck.ObserveRegisteredContexts(scopes);
+
+        if (mode == GuardMode.Learn)
+        {
+            return null;
+        }
+
+        // An empty profile allows nothing. Most often the file is missing or ProfilePath is wrong.
+        if (profile.EndpointCount == 0)
+        {
+            return $"the profile at '{store.Location}' is missing or empty, so it allows no access. " +
+                "Record the profile in Learn mode and deploy the file with the app, or correct ProfilePath.";
+        }
+
+        return database is { Match: DatabaseMatch.OtherProvider }
+            ? $"the profile at '{store.Location}' does not fit the database of the app: {databaseCheck.Explain(database)}"
+            : null;
     }
 
     private string? FindEnforcedEndpoint() => endpointSources

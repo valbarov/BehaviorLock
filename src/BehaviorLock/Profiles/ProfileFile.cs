@@ -7,9 +7,13 @@ namespace BehaviorLock;
 /// <summary>
 /// Reads and writes the JSON form of a profile: endpoint key → sorted list of accesses.
 /// The recorded profile, the approved file and the pending file all use this form.
+/// The recorded profile also has the key <c>$database</c> with the databases it was recorded with.
 /// </summary>
 internal static class ProfileFile
 {
+    /// <summary>No endpoint key can be equal to this key, because an endpoint key starts with an HTTP method.</summary>
+    private const string DatabaseKey = "$database";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -38,14 +42,28 @@ internal static class ProfileFile
                 return null;
             }
 
-            var endpoints = JsonSerializer.Deserialize<Dictionary<string, string[]>>(File.ReadAllText(path), JsonOptions);
-            return new EndpointProfile(endpoints ?? []);
+            var endpoints = JsonSerializer.Deserialize<Dictionary<string, string[]>>(File.ReadAllText(path), JsonOptions) ?? [];
+            endpoints.Remove(DatabaseKey, out var databases);
+
+            var profile = new EndpointProfile(endpoints);
+            foreach (var database in databases ?? [])
+            {
+                profile.AddDatabase(database);
+            }
+
+            return profile;
         }
     }
 
     public static void Write(string path, EndpointProfile profile)
     {
-        var json = JsonSerializer.Serialize(profile.ToDictionary(), JsonOptions) + Environment.NewLine;
+        var content = profile.ToDictionary();
+        if (profile.Databases.Count > 0)
+        {
+            content[DatabaseKey] = [.. profile.Databases];
+        }
+
+        var json = JsonSerializer.Serialize(content, JsonOptions) + Environment.NewLine;
 
         lock (FileLock)
         {

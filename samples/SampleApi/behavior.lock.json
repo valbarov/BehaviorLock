@@ -1,4 +1,7 @@
 {
+  "$database": [
+    "Microsoft.EntityFrameworkCore.Sqlite 11.0.0"
+  ],
   "DELETE /orders/{id:int}": [
     "sql: DELETE FROM \"Orders\" AS \"o\" WHERE \"o\".\"Id\" = ?"
   ],
