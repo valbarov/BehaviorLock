@@ -17,6 +17,12 @@ bugs that nobody has seen before, as long as they change what the endpoint touch
    in the pull request.
 3. **Enforce.** In production the guard checks each access *before* it runs. An access that is not in the
    profile never runs. The request gets a 403 and an alert is raised.
+4. **Close the gaps.** Tests never cover every legal path. In production the guard writes each unknown access
+   to a pending file. A person reviews it and accepts the legal ones.
+   See [Find the gaps in production](#find-the-gaps-in-production).
+
+You do not have to enforce everything at once. Each endpoint can have its own mode.
+See [Mode per endpoint](#mode-per-endpoint).
 
 An access is one of:
 
@@ -67,6 +73,18 @@ app.UseBehaviorLock();
 }
 ```
 
+## Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `Mode` | `Audit` | The global mode. See [Modes](#modes) |
+| `ProfilePath` | `behavior.lock.json` | The recorded profile. See [Deploy the profile](#deploy-the-profile) |
+| `ApprovedPath` | Not set | The file with reviewed accesses. See [Find the gaps in production](#find-the-gaps-in-production) |
+| `PendingPath` | Not set | The file where the guard writes unknown accesses. Not set means that no file is written |
+| `PendingLimit` | `1000` | The largest number of accesses in the pending file |
+
+A relative path is resolved against the content root of the app.
+
 ## Modes
 
 | Mode | Access that is not in the profile |
@@ -76,10 +94,11 @@ app.UseBehaviorLock();
 | `Audit` | Reported, but allowed. This is the default |
 | `Enforce` | Reported and blocked. The response is 403 with an empty body |
 
-Recommended rollout: record with tests, run `Audit` in production until the alerts stay quiet, then switch to `Enforce`.
-You can also switch one endpoint at a time. See [Mode per endpoint](#mode-per-endpoint).
+Recommended rollout: record with tests, then run `Audit` in production with a pending file. When the pending
+file stays empty, switch to `Enforce`. You can also switch one endpoint at a time.
+See [Mode per endpoint](#mode-per-endpoint).
 
-In `Enforce` mode an endpoint that has no profile cannot touch anything.
+In `Enforce` mode an endpoint that has no profile and no approved accesses cannot touch anything.
 
 ## Mode per endpoint
 
@@ -228,6 +247,11 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
   path during recording, that path becomes legal. Review the profile diff.
 - **Missing test coverage blocks legal traffic.** A legal path that no test covers gets a 403 in `Enforce` mode.
   Run `Audit` mode with a pending file first; see [Find the gaps in production](#find-the-gaps-in-production).
+- **The approved file and the mode of an endpoint weaken the guard when they are used without care.**
+  An approved attack is legal from then on, and an endpoint with the mode `Off` or `Audit` is not protected.
+  Review both in the pull request.
+- **The pending file is local to one instance.** There is no tool yet that collects the files of many
+  instances or copies entries to the approved file. Both steps are done by hand.
 - **The guard runs inside the app process.** An attacker with full code execution can turn it off.
 - **The SQL normalizer is a small scanner, not a parser.** It is tested with SQLite only.
 
@@ -236,16 +260,17 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 | Interface | Purpose | Default |
 |---|---|---|
 | `IViolationSink` | Receives violations | `LoggingViolationSink` |
-| `IProfileStore` | Loads and saves the profile | `JsonFileProfileStore` |
+| `IProfileStore` | Loads and saves the recorded profile, and names its location | `JsonFileProfileStore` |
 | `ISqlNormalizer` | Reduces SQL to its shape | `SqlNormalizer` |
 | `IAccessGuard` | Checks one access. Call it from your own code to guard other resources | `AccessGuard` |
+| `IGuardModeMetadata` | Endpoint metadata that sets the mode of one endpoint | `BehaviorLockAttribute` |
 
 ## Repository layout
 
 ```
 src/BehaviorLock            The library
 samples/SampleApi            Shop API with deliberate weaknesses, plus its recorded profile
-tests/BehaviorLock.Tests    Unit tests, legal requests, attacks
+tests/BehaviorLock.Tests    Unit tests, legal requests, attacks, pending and approved files, mode per endpoint
 perf/BehaviorLock.LoadTest   Load test that compares the API with and without the guard
 ```
 
@@ -288,6 +313,9 @@ it, with about 770 bytes allocated.
 
 How to read these numbers:
 
+- They were measured before the pending file and the mode per endpoint were added. Both add a small
+  amount of work per request, and the load test was not run again after that.
+
 - A local SQLite file answers in about 0.2 ms. That makes the relative cost of the guard as high as it gets.
   A database on the network is slower, so the same cost is a smaller share of the request.
 - In `Off` mode, and for code outside a request, the guard skips its work: the SQL is not normalized and
@@ -295,6 +323,21 @@ How to read these numbers:
 - The load client runs in the same process as the servers, and the machine speed changes during a run.
   The test compares each variant with the baseline run of the same round to reduce that effect.
   Differences below about 1% are not reliable.
+
+## Recent changes
+
+2026-11-18:
+
+- **License.** BehaviorLock is now open source under Apache-2.0. Before, it was source-available.
+- **Profile path and startup check.** A relative `ProfilePath` is resolved against the content root, not
+  against the current directory. `Enforce` mode does not start with a missing or empty profile.
+  See [Deploy the profile](#deploy-the-profile).
+- **Pending and approved files.** The guard writes unknown accesses to a pending file, and it allows the
+  accesses of a reviewed approved file. See [Find the gaps in production](#find-the-gaps-in-production).
+- **Mode per endpoint.** `WithBehaviorLock(...)` and `[BehaviorLock(...)]` set the mode of one endpoint,
+  route group, controller or action. See [Mode per endpoint](#mode-per-endpoint).
+- **API changes.** `IProfileStore` has the new member `Location`. `JsonFileProfileStore` needs an
+  `IHostEnvironment`. `GuardContext` has the new property `Mode`.
 
 ## License
 
