@@ -51,4 +51,13 @@ public static class BehaviorLockExtensions
     public static DbContextOptionsBuilder UseBehaviorLock(
         this DbContextOptionsBuilder builder, IServiceProvider services) =>
         builder.AddInterceptors(services.GetRequiredService<GuardDbCommandInterceptor>());
+
+    /// <summary>
+    /// Sets the guard mode of this endpoint, or of every endpoint in this route group.
+    /// Only Off, Audit and Enforce are legal. The global mode Off or Learn still applies to every endpoint.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The mode is Learn.</exception>
+    public static TBuilder WithBehaviorLock<TBuilder>(this TBuilder builder, GuardMode mode)
+        where TBuilder : IEndpointConventionBuilder =>
+        builder.WithMetadata(new BehaviorLockAttribute(mode));
 }

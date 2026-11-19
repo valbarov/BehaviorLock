@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -11,8 +12,9 @@ namespace BehaviorLock;
 internal sealed class ProfileLifecycle(
     EndpointProfile profile,
     IProfileStore store,
+    IEnumerable<EndpointDataSource> endpointSources,
     IOptions<BehaviorLockOptions> options,
-    ILogger<ProfileLifecycle> logger) : IHostedService
+    ILogger<ProfileLifecycle> logger) : IHostedLifecycleService
 {
     private readonly Lock _saveLock = new();
     private bool _saved;
@@ -47,6 +49,29 @@ internal sealed class ProfileLifecycle(
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Checks the endpoints that have their own mode. The endpoints are known only now,
+    /// after the server has built the request pipeline.
+    /// </summary>
+    public Task StartedAsync(CancellationToken cancellationToken)
+    {
+        if (options.Value.Mode == GuardMode.Audit && profile.EndpointCount == 0 && FindEnforcedEndpoint() is { } endpoint)
+        {
+            throw new InvalidOperationException(
+                $"BehaviorLock endpoint '{endpoint}' has the mode Enforce, but the profile at '{store.Location}' " +
+                "is missing or empty. Every access of this endpoint would be blocked. " +
+                "Record the profile in Learn mode and deploy the file with the app, or correct ProfilePath.");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task StartingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
     public Task StopAsync(CancellationToken cancellationToken)
     {
         if (options.Value.Mode == GuardMode.Learn)
@@ -66,4 +91,9 @@ internal sealed class ProfileLifecycle(
 
         return Task.CompletedTask;
     }
+
+    private string? FindEnforcedEndpoint() => endpointSources
+        .SelectMany(source => source.Endpoints)
+        .FirstOrDefault(endpoint => endpoint.Metadata.GetMetadata<IGuardModeMetadata>()?.Mode == GuardMode.Enforce)
+        ?.DisplayName;
 }

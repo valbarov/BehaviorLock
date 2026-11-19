@@ -77,8 +77,39 @@ app.UseBehaviorLock();
 | `Enforce` | Reported and blocked. The response is 403 with an empty body |
 
 Recommended rollout: record with tests, run `Audit` in production until the alerts stay quiet, then switch to `Enforce`.
+You can also switch one endpoint at a time. See [Mode per endpoint](#mode-per-endpoint).
 
 In `Enforce` mode an endpoint that has no profile cannot touch anything.
+
+## Mode per endpoint
+
+The global mode applies to every endpoint. You can give one endpoint or one route group its own mode.
+For example, the global mode is `Audit` and the stable endpoints already use `Enforce`.
+Or the global mode is `Enforce` and one complex search endpoint stays in `Audit`.
+
+```csharp
+// The global mode is Audit.
+app.MapGet("/products/{id}", GetProduct).WithBehaviorLock(GuardMode.Enforce);
+
+var orders = app.MapGroup("/orders").WithBehaviorLock(GuardMode.Enforce);
+orders.MapPost("/", CreateOrder);
+
+// The attribute works on minimal API handlers, MVC controllers and MVC actions.
+[BehaviorLock(GuardMode.Enforce)]
+public sealed class AccountController : ControllerBase { /* ... */ }
+```
+
+| Global mode | Mode that applies to an endpoint |
+|---|---|
+| `Off` | `Off` for every endpoint. This turns the guard off everywhere, whatever the endpoints say |
+| `Learn` | `Learn` for every endpoint, so the profile covers all endpoints |
+| `Audit` or `Enforce` | The mode of the endpoint if it has one, else the global mode. It can be stricter or weaker |
+
+- Only `Off`, `Audit` and `Enforce` are legal for one endpoint. `Learn` throws an `ArgumentOutOfRangeException`,
+  because `Learn` on one endpoint in production would allow everything there without a report.
+- The mode of an endpoint beats the mode of its route group. The mode of an action beats the mode of its controller.
+- An endpoint with the mode `Enforce` needs the profile, also when the global mode is `Audit`.
+  See [Deploy the profile](#deploy-the-profile).
 
 ## Deploy the profile
 
@@ -90,7 +121,7 @@ A missing or empty profile allows nothing, so the guard makes it visible at star
 | Mode | Profile is missing or empty |
 |---|---|
 | `Enforce` | The app does not start. The error names the full path of the profile |
-| `Audit` | The app starts and logs a warning |
+| `Audit` | The app starts and logs a warning. It does not start when an endpoint has its own mode `Enforce` |
 | `Learn`, `Off` | The app starts |
 
 ## Record the profile from tests

@@ -5,8 +5,9 @@ namespace BehaviorLock;
 public interface IAccessGuard
 {
     /// <summary>
-    /// False when <see cref="Check"/> would ignore every access: the mode is <see cref="GuardMode.Off"/>
-    /// or the code runs outside a guarded request. Callers can then skip the work of building the access.
+    /// False when <see cref="Check"/> would ignore every access: the mode of the current request is
+    /// <see cref="GuardMode.Off"/> or the code runs outside a guarded request. Callers can then skip the work
+    /// of building the access.
     /// </summary>
     bool IsActive { get; }
 
@@ -23,13 +24,12 @@ public sealed class AccessGuard(
     IEnumerable<IViolationSink> sinks,
     IOptions<BehaviorLockOptions> options) : IAccessGuard
 {
-    // No context means the access is outside a guarded request, for example startup code.
-    public bool IsActive => options.Value.Mode != GuardMode.Off && contextAccessor.Current is not null;
+    public bool IsActive => ModeOf(contextAccessor.Current) != GuardMode.Off;
 
     public void Check(ResourceAccess access)
     {
-        var mode = options.Value.Mode;
         var context = contextAccessor.Current;
+        var mode = ModeOf(context);
 
         if (mode == GuardMode.Off || context is null)
         {
@@ -59,4 +59,10 @@ public sealed class AccessGuard(
             throw new GuardViolationException(violation);
         }
     }
+
+    // No context means the access is outside a guarded request, for example startup code.
+    // The middleware puts the mode of the endpoint into the context. A context without a mode uses the global mode.
+    // The global rules are applied here again, so that global Off turns the guard off for every context.
+    private GuardMode ModeOf(GuardContext? context) =>
+        context is null ? GuardMode.Off : GuardModes.Effective(options.Value.Mode, context.Mode);
 }

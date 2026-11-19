@@ -6,6 +6,7 @@ namespace BehaviorLock;
 
 /// <summary>
 /// Opens a <see cref="GuardContext"/> for each routed request and turns a blocked access into a 403 response.
+/// The mode of the request comes from the global mode and the <see cref="IGuardModeMetadata"/> of the endpoint.
 /// Must run after routing.
 /// </summary>
 public sealed class GuardMiddleware(
@@ -16,16 +17,23 @@ public sealed class GuardMiddleware(
 {
     public async Task InvokeAsync(HttpContext http)
     {
-        var mode = options.Value.Mode;
-        var endpoint = EndpointKey.For(http);
+        var global = options.Value.Mode;
 
-        if (mode == GuardMode.Off || endpoint is null)
+        if (global == GuardMode.Off || http.GetEndpoint() is not RouteEndpoint routeEndpoint)
         {
             await next(http);
             return;
         }
 
-        var context = new GuardContext(endpoint);
+        var mode = GuardModes.Effective(global, routeEndpoint.Metadata.GetMetadata<IGuardModeMetadata>()?.Mode);
+        if (mode == GuardMode.Off)
+        {
+            await next(http);
+            return;
+        }
+
+        var endpoint = EndpointKey.Create(http.Request.Method, routeEndpoint);
+        var context = new GuardContext(endpoint, mode);
         contextAccessor.Current = context;
 
         if (mode == GuardMode.Learn)
