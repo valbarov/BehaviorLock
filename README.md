@@ -213,6 +213,6 @@ How to read these numbers:
 
 ## License
 
-BehaviorLock is source-available, not open source. It is free for noncommercial use and for small companies
-(fewer than 100 people and less than 1,000,000 USD revenue). Any other use needs a commercial license.
-See [LICENSE.md](LICENSE.md) for the exact terms.
+BehaviorLock is open source under the [Apache License 2.0](LICENSE).
+
+Copyright 2026 Vadim Albarov
