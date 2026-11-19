@@ -61,12 +61,10 @@ public sealed class GuardDbCommandInterceptor(
         }
 
         // Learn mode records the database provider. The other modes report a provider that the profile does not know.
-        if (eventData?.Context is { } context)
-        {
-            databaseCheck?.Observe(context);
-        }
+        // The provider also gives the dialect. Without a context the dialect is not known, and the normalizer is careful.
+        var database = eventData?.Context is { } context ? databaseCheck?.Observe(context) : null;
 
-        foreach (var statement in normalizer.Normalize(command.CommandText))
+        foreach (var statement in normalizer.Normalize(command.CommandText, database?.Dialect ?? SqlDialect.Unknown))
         {
             guard.Check(ResourceAccess.Sql(statement));
         }

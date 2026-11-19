@@ -172,6 +172,34 @@ A test database of another kind gives a profile that production cannot use.
 - A profile without a `$database` entry is not checked. This is the case for a profile from an older
   version, and for a recording that made no SQL access.
 
+## SQL dialects
+
+The guard replaces each string in the SQL text by `?`. It must find the end of each string exactly where
+the database finds it. If it finds another end, it replaces code by `?`, and an injection keeps the legal shape.
+Databases read strings and comments in different ways, so the rules come from the provider of the `DbContext`:
+
+| Provider | Rules |
+|---|---|
+| SQLite, Oracle | Standard strings and comments |
+| SQL Server | Standard strings. A comment can contain a comment |
+| PostgreSQL | `$$...$$` and `$tag$...$tag$` are strings. A comment can contain a comment. Backslash: see below |
+| MySQL, MariaDB | `#` starts a comment. Backslash: see below |
+| Any other provider | Not known. Every text that databases read in different ways is in doubt |
+
+**When in doubt, the command is not normalized.** MySQL and PostgreSQL read `\'` as a quote inside the string
+or as the end of the string. That depends on a setting of the server, which the guard cannot see. So the
+guard reads the string both ways. When the two ways end at the same place, the string becomes `?` as usual.
+When they end at different places, the guard keeps the whole command as it is, with its values.
+
+A command that is kept as it is only matches a profile entry with the same text. So a fixed command with
+parameters still works. A command that is built from user input never matches, and it is reported or blocked.
+
+Two more rules close other ways to keep the shape:
+
+- Only a list of parameters is reduced to one placeholder: `IN (@a, @b, @c)` becomes `IN (?)`. A list with a
+  literal keeps its length, because an injection could add a value or a whole `VALUES` row.
+- Letters directly after a number are not part of the number: `1OR` becomes `?OR`.
+
 ## Record the profile from tests
 
 The profile comes from your integration tests, not from manual use. The test project in this repository shows the pattern:
@@ -282,7 +310,14 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 - **The pending file is local to one instance.** There is no tool yet that collects the files of many
   instances or copies entries to the approved file. Both steps are done by hand.
 - **The guard runs inside the app process.** An attacker with full code execution can turn it off.
-- **The SQL normalizer is a small scanner, not a parser.** It is tested with SQLite only.
+- **The SQL normalizer is a small scanner, not a parser.** It has rules for SQLite, SQL Server, PostgreSQL and
+  MySQL; see [SQL dialects](#sql-dialects). The rules for MySQL 8.4 and PostgreSQL 17 were compared with real
+  servers, with random commands. The rules for SQL Server come from its documentation and are tested with
+  SQL text only. A random test finds many errors, but it does not prove that there are none.
+- **MySQL text in double quotes is never normalized.** MySQL reads `"..."` as a string or as a name, and that
+  depends on a setting. The guard keeps it as it is, so each value gives its own shape. Use single quotes.
+- **A command that is not normalized contains its values.** They can appear in the log and in the pending file.
+- **Each length of a list with literals is its own shape.** Use parameters for lists.
 - **The database check compares the provider and its version only.** It does not see the version of the
   database server or its settings, and both can change the SQL too.
 
@@ -292,7 +327,7 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 |---|---|---|
 | `IViolationSink` | Receives violations | `LoggingViolationSink` |
 | `IProfileStore` | Loads and saves the recorded profile with its `Databases`, and names its location | `JsonFileProfileStore` |
-| `ISqlNormalizer` | Reduces SQL to its shape | `SqlNormalizer` |
+| `ISqlNormalizer` | Reduces SQL to its shape, with the rules of a `SqlDialect` | `SqlNormalizer` |
 | `IAccessGuard` | Checks one access. Call it from your own code to guard other resources | `AccessGuard` |
 | `IGuardModeMetadata` | Endpoint metadata that sets the mode of one endpoint | `BehaviorLockAttribute` |
 
@@ -313,6 +348,31 @@ dotnet test
 
 The test run rewrites `samples/SampleApi/behavior.lock.json`. A diff in that file after a test run
 means the behavior of an endpoint changed.
+
+### Tests against real MySQL and PostgreSQL servers
+
+[`RealDatabaseTests`](tests/BehaviorLock.Tests/RealDatabaseTests.cs) compares the SQL normalizer with real
+servers. It builds thousands of commands from random pieces, runs each one, and counts the rows. A command
+that returns every row ran injected code, so its shape must differ from the legal shape. The tests cover
+MySQL with and without `NO_BACKSLASH_ESCAPES` and `ANSI_QUOTES`, and PostgreSQL with
+`standard_conforming_strings` on and off.
+
+These tests are skipped unless the connection strings are set. Start two test servers, with Docker or with `wslc`:
+
+```
+docker run -d --rm --name behaviorlock-mysql -e MYSQL_ROOT_PASSWORD=test -e MYSQL_DATABASE=guard -p 33306:3306 mysql:8.4
+docker run -d --rm --name behaviorlock-postgres -e POSTGRES_PASSWORD=test -e POSTGRES_DB=guard -p 35432:5432 postgres:17
+```
+
+Then set the variables and run the tests:
+
+```
+BEHAVIORLOCK_TEST_MYSQL="Server=127.0.0.1;Port=33306;User ID=root;Password=test;Database=guard;AllowUserVariables=true"
+BEHAVIORLOCK_TEST_POSTGRES="Host=127.0.0.1;Port=35432;Username=postgres;Password=test;Database=guard"
+dotnet test --filter "FullyQualifiedName~RealDatabaseTests"
+```
+
+The tests drop and create a table with the name `Users`, so use them only with a test database.
 
 ## Performance
 

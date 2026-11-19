@@ -15,11 +15,11 @@ public sealed class SqlNormalizerTests
     }
 
     [Fact]
-    public void Value_lists_do_not_depend_on_the_number_of_values()
+    public void Parameter_lists_do_not_depend_on_the_number_of_parameters()
     {
         Assert.Equal(
             _normalizer.Normalize("SELECT * FROM T WHERE Id IN (@a)"),
-            _normalizer.Normalize("SELECT * FROM T WHERE Id IN (@a, @b, 3)"));
+            _normalizer.Normalize("SELECT * FROM T WHERE Id IN (@a, @b, @c)"));
 
         Assert.Equal(
             _normalizer.Normalize("INSERT INTO T (A, B) VALUES (@p0, @p1)"),

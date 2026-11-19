@@ -25,7 +25,11 @@ public enum DatabaseMatch
 }
 
 /// <summary>The result for one database, for example <c>Microsoft.EntityFrameworkCore.Sqlite 11.0.0</c>.</summary>
-public sealed record DatabaseCheckResult(DatabaseMatch Match, string Database);
+public sealed record DatabaseCheckResult(DatabaseMatch Match, string Database)
+{
+    /// <summary>How this database reads strings and comments. The SQL normalizer needs it.</summary>
+    public SqlDialect Dialect { get; } = SqlDialects.FromProvider(Database);
+}
 
 /// <summary>
 /// Keeps the database provider with the profile. Each provider writes its own SQL, so a profile that was

@@ -100,6 +100,19 @@ public sealed class DatabaseCheckTests(ProfileFixture fixture) : IDisposable
     }
 
     [Fact]
+    public async Task The_normalizer_gets_the_dialect_of_the_database()
+    {
+        await using var api = fixture.Create(GuardMode.Audit);
+
+        // SQLite does not accept '#', so the query fails. The guard reports the access before that.
+        using var response = await api.CreateClient().GetAsync("/products?sort=" + Uri.EscapeDataString("Name #1"));
+
+        // An unknown database would keep the command as it is, with the 1. SQLite has standard rules.
+        var violation = Assert.Single(api.Violations.Items);
+        Assert.Equal("SELECT * FROM Products ORDER BY Name #?", violation.Access.Key);
+    }
+
+    [Fact]
     public void The_store_keeps_the_database_with_the_profile()
     {
         var store = new JsonFileProfileStore(

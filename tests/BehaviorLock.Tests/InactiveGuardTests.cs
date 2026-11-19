@@ -60,10 +60,10 @@ public sealed class InactiveGuardTests
 
         public int Calls { get; private set; }
 
-        public IReadOnlyList<string> Normalize(string sql)
+        public IReadOnlyList<string> Normalize(string sql, SqlDialect dialect = SqlDialect.Unknown)
         {
             Calls++;
-            return _inner.Normalize(sql);
+            return _inner.Normalize(sql, dialect);
         }
     }
 }
