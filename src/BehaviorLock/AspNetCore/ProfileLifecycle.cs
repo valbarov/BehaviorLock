@@ -14,6 +14,9 @@ internal sealed class ProfileLifecycle(
     IOptions<BehaviorLockOptions> options,
     ILogger<ProfileLifecycle> logger) : IHostedService
 {
+    private readonly Lock _saveLock = new();
+    private bool _saved;
+
     public Task StartAsync(CancellationToken cancellationToken)
     {
         var mode = options.Value.Mode;
@@ -48,8 +51,17 @@ internal sealed class ProfileLifecycle(
     {
         if (options.Value.Mode == GuardMode.Learn)
         {
-            store.Save(profile);
-            logger.LogInformation("BehaviorLock saved the profile to {Location}", store.Location);
+            // A host can run StopAsync twice in parallel (WebApplicationFactory does). Save once,
+            // and let the second call wait, so that the file is complete when any of the calls returns.
+            lock (_saveLock)
+            {
+                if (!_saved)
+                {
+                    store.Save(profile);
+                    _saved = true;
+                    logger.LogInformation("BehaviorLock saved the profile to {Location}", store.Location);
+                }
+            }
         }
 
         return Task.CompletedTask;
