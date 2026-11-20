@@ -15,6 +15,7 @@ public interface IAccessGuard
     /// Call this before a resource is touched.
     /// Throws <see cref="GuardViolationException"/> when the access must be blocked.
     /// A limit is recorded and reported with its number rounded up; see <see cref="ResourceAccess.RoundedUp"/>.
+    /// A number over a limit is not blocked when <see cref="BehaviorLockOptions.EnforceLimits"/> is false.
     /// </summary>
     void Check(ResourceAccess access);
 }
@@ -54,7 +55,9 @@ public sealed class AccessGuard(
             return;
         }
 
-        var violation = new GuardViolation(context.Endpoint, access.RoundedUp(), Blocked: mode == GuardMode.Enforce);
+        // A limit can be report-only: see BehaviorLockOptions.EnforceLimits.
+        var blocked = mode == GuardMode.Enforce && (access.UpTo is null || options.Value.EnforceLimits);
+        var violation = new GuardViolation(context.Endpoint, access.RoundedUp(), blocked);
         foreach (var sink in sinks)
         {
             sink.Report(violation);

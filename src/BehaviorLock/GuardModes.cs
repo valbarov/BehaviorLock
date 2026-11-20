@@ -20,12 +20,12 @@ public static class GuardModes
     };
 
     /// <summary>
-    /// Only Off, Audit and Enforce are legal for one endpoint. Learn on one endpoint in production
+    /// Only Off, Audit and Enforce are legal for one endpoint or scope. Learn on one endpoint in production
     /// would allow every access there without a report.
     /// </summary>
     internal static GuardMode RequireEndpointMode(GuardMode mode, string parameterName) =>
         mode is GuardMode.Off or GuardMode.Audit or GuardMode.Enforce
             ? mode
             : throw new ArgumentOutOfRangeException(
-                parameterName, mode, "The mode of one endpoint must be Off, Audit or Enforce. Learn is only legal as the global mode.");
+                parameterName, mode, "The mode of one endpoint or scope must be Off, Audit or Enforce. Learn is only legal as the global mode.");
 }

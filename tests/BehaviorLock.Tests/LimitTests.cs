@@ -154,6 +154,29 @@ public sealed class LimitTests : IDisposable
         Assert.Equal([new GuardViolation(Endpoint, ResourceAccess.Rows(Shape, 100), Blocked: false)], _sink.Items);
     }
 
+    [Fact]
+    public void A_number_over_the_limit_is_only_reported_when_limits_are_not_enforced()
+    {
+        _profile.Allow(Endpoint, ResourceAccess.Rows(Shape, 10));
+        var guard = Guard(GuardMode.Enforce, options => options.EnforceLimits = false);
+
+        guard.Check(ResourceAccess.Rows(Shape, 37));
+
+        // The request goes on, and the pending file gets the number that the request needed.
+        Assert.Equal([new GuardViolation(Endpoint, ResourceAccess.Rows(Shape, 100), Blocked: false)], _sink.Items);
+        Assert.Null(_accessor.Current!.Violation);
+    }
+
+    [Fact]
+    public void Every_other_access_is_still_blocked_when_limits_are_not_enforced()
+    {
+        _profile.Allow(Endpoint, new ResourceAccess(ResourceAccess.CallerKind, "signed in, role admin"));
+        var guard = Guard(GuardMode.Enforce, options => options.EnforceLimits = false);
+
+        Assert.Throws<GuardViolationException>(() => guard.Check(ResourceAccess.Sql("SELECT * FROM Users")));
+        Assert.Throws<GuardViolationException>(() => guard.Check(new ResourceAccess(ResourceAccess.CallerKind, "anonymous")));
+    }
+
     [Theory]
     [InlineData(GuardMode.Audit)]
     [InlineData(GuardMode.Enforce)]
@@ -208,6 +231,10 @@ public sealed class LimitTests : IDisposable
         Assert.DoesNotContain("up to 100 ", File.ReadAllText(path));
     }
 
-    private AccessGuard Guard(GuardMode mode) =>
-        new(_accessor, _profile, [_sink], Options.Create(new BehaviorLockOptions { Mode = mode }));
+    private AccessGuard Guard(GuardMode mode, Action<BehaviorLockOptions>? configure = null)
+    {
+        var options = new BehaviorLockOptions { Mode = mode };
+        configure?.Invoke(options);
+        return new(_accessor, _profile, [_sink], Options.Create(options));
+    }
 }

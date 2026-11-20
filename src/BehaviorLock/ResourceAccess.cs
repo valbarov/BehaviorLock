@@ -48,11 +48,18 @@ public sealed record ResourceAccess(string Kind, string Key)
     /// The kind of caller: <c>anonymous</c>, <c>signed in, no role</c>, or the sorted list of all roles,
     /// for example <c>signed in, role admin, role support</c>. The whole list must match, so that a
     /// recording with a caller that has two roles does not allow a caller with only one of them.
+    /// <para>
+    /// The values of the claims in <paramref name="claimTypes"/> follow the roles, sorted by type and value,
+    /// for example <c>signed in, no role, scope orders.read, scope orders.write</c>. A value with spaces
+    /// counts as a list of values, like the <c>scope</c> claim of OAuth.
+    /// </para>
     /// </summary>
-    public static ResourceAccess Caller(ClaimsPrincipal? user)
+    public static ResourceAccess Caller(ClaimsPrincipal? user, ICollection<string>? claimTypes = null)
     {
         var signedIn = false;
+        var withClaims = claimTypes is { Count: > 0 };
         List<string>? roles = null;
+        List<(string Type, string Value)>? others = null;
 
         foreach (var identity in user?.Identities ?? [])
         {
@@ -68,20 +75,49 @@ public sealed record ResourceAccess(string Kind, string Key)
                 {
                     roles.Add(claim.Value);
                 }
+
+                if (withClaims && claimTypes!.Contains(claim.Type))
+                {
+                    foreach (var value in claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        if (!(others ??= []).Contains((claim.Type, value)))
+                        {
+                            others.Add((claim.Type, value));
+                        }
+                    }
+                }
             }
         }
 
-        if (roles is null)
+        if (roles is null && others is null)
         {
             return signedIn ? CallerWithoutRole : AnonymousCaller;
         }
 
-        roles.Sort(StringComparer.Ordinal);
-
         var key = new StringBuilder("signed in");
-        foreach (var role in roles)
+        if (roles is null)
         {
-            key.Append(", role ").Append(role);
+            key.Append(", no role");
+        }
+        else
+        {
+            roles.Sort(StringComparer.Ordinal);
+            foreach (var role in roles)
+            {
+                key.Append(", role ").Append(role);
+            }
+        }
+
+        if (others is not null)
+        {
+            others.Sort((a, b) => string.CompareOrdinal(a.Type, b.Type) is var byType and not 0
+                ? byType
+                : string.CompareOrdinal(a.Value, b.Value));
+
+            foreach (var (type, value) in others)
+            {
+                key.Append(", ").Append(type).Append(' ').Append(value);
+            }
         }
 
         return new(CallerKind, key.ToString());

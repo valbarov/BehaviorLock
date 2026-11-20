@@ -55,7 +55,7 @@ public sealed class GuardMiddleware(
             // A caller that the profile does not know is stopped here, before the endpoint runs.
             if (options.Value.CheckCallers)
             {
-                guard.Check(ResourceAccess.Caller(http.User));
+                guard.Check(ResourceAccess.Caller(http.User, options.Value.CallerClaims));
             }
 
             await next(http);
@@ -111,7 +111,9 @@ public sealed class GuardMiddleware(
             return null;
         }
 
-        var body = new GuardedResponseBody(serverBody, guard, context, limit);
+        // Only a request that blocks limits stops a write. The others report the size when they have finished.
+        var stopsWrites = context.Mode == GuardMode.Enforce && options.Value.EnforceLimits;
+        var body = new GuardedResponseBody(serverBody, guard, context, stopsWrites ? limit : null);
         http.Features.Set<IHttpResponseBodyFeature>(body);
         return body;
     }

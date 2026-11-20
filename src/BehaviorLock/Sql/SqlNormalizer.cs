@@ -11,6 +11,10 @@ public interface ISqlNormalizer
     /// The dialect says how the database reads strings and comments.
     /// When the normalizer cannot be sure where a string or a comment ends,
     /// it returns the whole command as it is, as one statement.
+    /// <para>
+    /// The result must depend only on the two arguments. The guard keeps it and uses it again for
+    /// later commands with the same text; see <see cref="BehaviorLockOptions.SqlShapeCacheSize"/>.
+    /// </para>
     /// </summary>
     IReadOnlyList<string> Normalize(string sql, SqlDialect dialect = SqlDialect.Unknown);
 }

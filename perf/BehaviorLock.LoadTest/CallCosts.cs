@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 
 namespace BehaviorLock.LoadTest;
@@ -31,6 +32,11 @@ public static class CallCosts
         Row("Normalize an EF Core query (95 chars)", () => normalizer.Normalize(EfQuery));
         Row("Normalize a raw query with a literal (46 chars)", () => normalizer.Normalize(RawQuery));
         Row("Check one allowed access in Enforce mode", () => guard.Check(access));
+
+        // The whole work for one command before it runs: the shape of the text, then the check.
+        using var command = new SqliteCommand(EfQuery);
+        var interceptor = new GuardDbCommandInterceptor(guard, normalizer);
+        Row("Check one EF Core command before it runs", () => interceptor.ReaderExecuting(command, null!, default));
         Console.WriteLine();
     }
 

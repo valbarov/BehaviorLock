@@ -6,16 +6,19 @@ namespace BehaviorLock;
 
 /// <summary>
 /// Counts the bytes of the response body on their way to the server. Nothing is kept in memory.
-/// In Enforce mode it stops the first write that would pass the limit, so the client never gets more
+/// With a limit it stops the first write that would pass the limit, so the client never gets more
 /// bytes than the limit. It also stops every write of a request that the guard has already blocked.
 /// </summary>
+/// <param name="limit">
+/// The size that no write may pass, or null to stop no write. Only a request that blocks limits has one.
+/// Every other request reports the full size once, when it has finished.
+/// </param>
 internal sealed class GuardedResponseBody(
     IHttpResponseBodyFeature inner, IAccessGuard guard, GuardContext context, long? limit) : Stream, IHttpResponseBodyFeature
 {
     private PipeWriter? _writer;
 
-    // Only Enforce mode stops a write. Audit mode reports the full size once, when the request has finished.
-    private bool CanStopWrites => context.Mode == GuardMode.Enforce && limit is not null;
+    private bool CanStopWrites => limit is not null;
 
     /// <summary>The bytes that were passed on to the server.</summary>
     public long Written { get; private set; }

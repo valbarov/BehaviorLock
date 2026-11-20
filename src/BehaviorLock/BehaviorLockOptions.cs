@@ -53,8 +53,30 @@ public sealed class BehaviorLockOptions
     public bool CheckCallers { get; set; } = true;
 
     /// <summary>
+    /// More claim types that are part of the kind of caller, for example <c>scope</c>. The roles are always
+    /// part of it. Each value of such a claim gives one part of the <c>caller:</c> entry, and a value with
+    /// spaces counts as a list of values. Use only claims with few values: a claim that differs for each
+    /// user, such as the user id, gives one kind of caller per user. A change of this list needs a new recording.
+    /// </summary>
+    public IList<string> CallerClaims { get; set; } = [];
+
+    /// <summary>
     /// Records and checks the limits of each endpoint: the rows that a SQL statement returns and the size
     /// of the response body. False means that limits are not recorded and not checked.
     /// </summary>
     public bool CheckLimits { get; set; } = true;
+
+    /// <summary>
+    /// False means that a number over a limit is reported, but never blocked, also in Enforce mode.
+    /// Every other access is still blocked. Use it while the limits still come from small test data:
+    /// the pending file then shows the numbers that production needs.
+    /// </summary>
+    public bool EnforceLimits { get; set; } = true;
+
+    /// <summary>
+    /// The largest number of SQL command texts whose shapes the guard keeps, so that it normalizes each
+    /// text once. When the cache is full, it starts again from empty. Zero turns the cache off, and
+    /// every command is normalized again.
+    /// </summary>
+    public int SqlShapeCacheSize { get; set; } = 1000;
 }

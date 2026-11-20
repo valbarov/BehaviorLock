@@ -129,6 +129,22 @@ public sealed class ResponseSizeTests
         Assert.Equal([new GuardViolation(EndpointOf(url), UpTo1000, Blocked: false)], api.Violations.Items);
     }
 
+    [Theory]
+    [InlineData("/text?size=101", 101)]
+    [InlineData("/json?count=50", 201)]
+    [InlineData("/chunks?size=80&count=3", 240)]
+    [InlineData("/unflushed?size=101", 101)]
+    public async Task A_larger_response_is_only_reported_when_limits_are_not_enforced(string url, int size)
+    {
+        await using var api = await TinyApi.StartAsync(GuardMode.Enforce, UpTo100, options => options.EnforceLimits = false);
+
+        using var response = await api.GetAsync(url);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(size, (await response.Content.ReadAsByteArrayAsync()).Length);
+        Assert.Equal([new GuardViolation(EndpointOf(url), UpTo1000, Blocked: false)], api.Violations.Items);
+    }
+
     [Fact]
     public async Task A_limit_written_by_a_person_needs_no_round_number()
     {
