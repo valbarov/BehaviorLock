@@ -70,6 +70,11 @@ Switch to `Enforce` when the reports stop.
 The full documentation is in the [repository](https://github.com/valbarov/BehaviorLock#readme): the modes,
 the options, how to record the profile from tests, how to find the gaps in production, and the known limits.
 
+## Security
+
+Report a vulnerability in private, not as a public issue. See the
+[security policy](https://github.com/valbarov/BehaviorLock/blob/main/SECURITY.md).
+
 ## License
 
 [Apache License 2.0](https://github.com/valbarov/BehaviorLock/blob/main/LICENSE)
