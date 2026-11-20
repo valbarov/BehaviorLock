@@ -7,7 +7,7 @@ It does not look for known attack patterns. It only knows the legal behavior, so
 bugs that nobody has seen before, as long as they change what the endpoint touches, who calls it, or how
 much it returns.
 
-> Status: MVP. It targets .NET 11 and covers EF Core and `IHttpClientFactory`. Read [Limits](#limits) before you use it.
+> Status: MVP. It targets .NET 11 and covers EF Core and `HttpClient`. Read [Known limits](#known-limits) before you use it.
 
 ## How it works
 
@@ -31,8 +31,8 @@ An access is one of:
 | Kind | What is recorded | Example |
 |---|---|---|
 | `sql` | The statement shape: the SQL text with all literals and parameters replaced by `?` | `SELECT * FROM Products WHERE Name LIKE ?` |
-| `http` | Method, scheme, host and port of an outbound call | `GET https://hooks.example.com` |
-| `caller` | The kind of caller: anonymous, or signed in with a list of roles. See [Callers](#callers) | `signed in, role admin` |
+| `http` | Method, scheme, host and port of an outbound call, also of each redirect hop. See [Outbound calls](#outbound-calls) | `GET https://hooks.example.com` |
+| `caller` | The kind of caller: anonymous, or signed in with a list of roles and of chosen claims. See [Callers](#callers) | `signed in, role admin` |
 | `rows` | The largest number of rows that one command returns. See [Limits](#limits) | `up to 10 from SELECT * FROM Products WHERE Name LIKE ?` |
 | `response` | The largest size of the response body. See [Limits](#limits) | `up to 1000 bytes` |
 
@@ -68,7 +68,7 @@ using BehaviorLock;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Register the guard. This also covers all IHttpClientFactory clients.
+// 1. Register the guard. This also covers the outbound calls of every HttpClient.
 builder.Services.AddBehaviorLock(options => builder.Configuration.GetSection("BehaviorLock").Bind(options));
 
 // 2. Let the guard check the commands of your DbContext.
@@ -102,6 +102,7 @@ app.UseBehaviorLock();
 | `PendingLimit` | `1000` | The largest number of accesses in the pending file |
 | `CheckCallers` | `true` | Records and checks the kind of caller. See [Callers](#callers) |
 | `CallerClaims` | Empty | More claim types that are part of the kind of caller, for example `scope`. See [Callers](#callers) |
+| `CheckAllHttpClients` | `true` | Checks every `HttpClient` and each redirect hop. `false` checks only the clients of `IHttpClientFactory`. See [Outbound calls](#outbound-calls) |
 | `CheckLimits` | `true` | Records and checks the rows and the response size. See [Limits](#limits) |
 | `EnforceLimits` | `true` | `false` means that a number over a limit is reported, but never blocked. See [Limits](#limits) |
 | `SqlShapeCacheSize` | `1000` | The number of SQL command texts whose shapes the guard keeps. `0` turns the cache off. See [Performance](#performance) |
@@ -152,6 +153,38 @@ public sealed class AccountController : ControllerBase { /* ... */ }
 - The mode of an endpoint beats the mode of its route group. The mode of an action beats the mode of its controller.
 - An endpoint with the mode `Enforce` needs the profile, also when the global mode is `Audit`.
   See [Deploy the profile](#deploy-the-profile).
+
+## Outbound calls
+
+The guard checks each outbound HTTP call before it is sent. The entry has the method, the scheme, the host
+and the port, for example `http: GET https://hooks.example.com`. The path is not part of it.
+
+- **Every `HttpClient` is covered**, also a client that a package creates by itself with `new HttpClient()`.
+  A package that starts to call a new host is stopped, whatever client it uses.
+- **Each redirect hop is checked.** A legal host can answer with a redirect to another host, for example to
+  an internal address. The second host must be in the profile too, or the call stops there.
+- **A blocked call is never sent.** The code that made the call gets a `GuardViolationException`. The
+  request is marked as blocked, also when the package catches the exception: it ends with a 403, or with a
+  closed connection when the answer has already started.
+
+How it works: the HTTP handlers of .NET (`SocketsHttpHandler` and `HttpClientHandler`) write an event at the
+start of each request and of each redirect hop. The guard listens to it. The clients of
+`IHttpClientFactory` get a handler of the guard as well, so they are covered with every primary handler.
+
+Things to know:
+
+- **Not covered:** a client that `IHttpClientFactory` did not create and that has a primary handler which
+  is not from .NET, for example `WinHttpHandler` or a handler of your own. Raw sockets and other protocols
+  are not covered either. See [Known limits](#known-limits).
+- **A `traceparent` header can appear.** The event needs an activity for each request. A call inside an
+  ASP.NET Core request with logging on has one already. A call without an activity around it, for example in
+  a [background job](#background-jobs), now carries a `traceparent` header.
+- **The .NET setting `System.Net.Http.EnableActivityPropagation` must stay on.** When an app turns it off,
+  the handlers write no event. The guard then logs a warning at startup and checks only the clients of
+  `IHttpClientFactory`, without redirect hops.
+- A call outside a request and outside a scope is not checked.
+- Set `CheckAllHttpClients` to `false` to check only the clients of `IHttpClientFactory`, and only their
+  first address.
 
 ## Callers
 
@@ -455,7 +488,7 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 - **Injection that keeps the shape and stays under the limits.** A `%` wildcard in a `LIKE` value changes
   the result, but not the statement. The guard sees it only when it returns more rows than the limit.
 
-## Limits
+## Known limits
 
 - **Attacks inside the profile pass.** Business logic errors, XSS and most DoS attacks do not change what an
   endpoint touches. Broken authorization passes when the attacker is a legal kind of caller, for example
@@ -463,9 +496,8 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 - **Callers and limits are only as good as the recording.** They come from the users and the data of your
   tests. See [Callers](#callers) and [Limits](#limits).
 - **A row limit works after the command has run.** See [Limits](#limits).
-- **Only EF Core and `IHttpClientFactory` are covered.** Dapper, raw ADO.NET, a directly created `HttpClient`,
-  file access and process start are not checked.
-- **HTTP redirects are not checked.** A legal host that redirects to another host passes.
+- **Only EF Core and `HttpClient` are covered.** Dapper, raw ADO.NET, raw sockets, file access and process
+  start are not checked. A few HTTP clients are not covered either; see [Outbound calls](#outbound-calls).
 - **Code outside a request is checked only inside a scope.** Startup code and a background job without a
   scope are not checked. See [Background jobs](#background-jobs).
 - **No request-wide rollback.** A blocked access never runs, but earlier writes of the same request stay,
@@ -506,7 +538,7 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 ```
 src/BehaviorLock            The library
 samples/SampleApi            Shop API with deliberate weaknesses, plus its recorded profile
-tests/BehaviorLock.Tests    Unit tests, legal requests, attacks, pending and approved files, mode per endpoint, callers, limits, scopes
+tests/BehaviorLock.Tests    Unit tests, legal requests, attacks, pending and approved files, mode per endpoint, callers, limits, scopes, outbound calls
 perf/BehaviorLock.LoadTest   Load test that compares the API with and without the guard
 ```
 
@@ -595,6 +627,9 @@ How to read these numbers:
   A database on the network is slower, so the same cost is a smaller share of the request.
 - In `Off` mode, and for code outside a request and outside a scope, the guard skips its work: the SQL is not normalized and
   the outbound call is not inspected. Only the call into the EF Core interceptor and the HTTP handler remains.
+- The load test answers outbound calls with a stub handler, so it does not measure the check of the .NET
+  handlers. In a separate test with a real local call (40 to 70 µs per call), the check made no
+  difference that the test could measure.
 - The load client runs in the same process as the servers, and the machine speed changes during a run.
   The test compares each variant with the baseline run of the same round to reduce that effect.
   Differences below about 1% are not reliable.
