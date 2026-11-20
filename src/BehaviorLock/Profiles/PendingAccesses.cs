@@ -10,7 +10,7 @@ namespace BehaviorLock;
 /// A person reviews that file. A pending access is either a legal path that the tests do not cover,
 /// or an attack. Does nothing when <see cref="BehaviorLockOptions.PendingPath"/> is not set.
 /// </summary>
-public sealed class PendingAccesses(
+internal sealed class PendingAccesses(
     IOptions<BehaviorLockOptions> options,
     IHostEnvironment environment,
     EndpointProfile profile,

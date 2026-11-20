@@ -60,16 +60,16 @@ public sealed class DatabaseCheckTests(ProfileFixture fixture) : IDisposable
     }
 
     [Theory]
-    [InlineData(new string[0], "A 1", DatabaseMatch.NotRecorded)]
-    [InlineData(new[] { "A 1" }, "A 1", DatabaseMatch.Same)]
-    [InlineData(new[] { "A 1", "B 1" }, "B 1", DatabaseMatch.Same)]
-    [InlineData(new[] { "A 1" }, "A 2", DatabaseMatch.OtherVersion)]
-    [InlineData(new[] { "A" }, "A 2", DatabaseMatch.OtherVersion)]
-    [InlineData(new[] { "A 1" }, "B 1", DatabaseMatch.OtherProvider)]
-    [InlineData(new[] { "A 1" }, "AB 1", DatabaseMatch.OtherProvider)]
-    public void A_database_is_compared_by_provider_and_then_by_version(string[] recorded, string database, DatabaseMatch expected)
+    [InlineData(new string[0], "A 1", nameof(DatabaseMatch.NotRecorded))]
+    [InlineData(new[] { "A 1" }, "A 1", nameof(DatabaseMatch.Same))]
+    [InlineData(new[] { "A 1", "B 1" }, "B 1", nameof(DatabaseMatch.Same))]
+    [InlineData(new[] { "A 1" }, "A 2", nameof(DatabaseMatch.OtherVersion))]
+    [InlineData(new[] { "A" }, "A 2", nameof(DatabaseMatch.OtherVersion))]
+    [InlineData(new[] { "A 1" }, "B 1", nameof(DatabaseMatch.OtherProvider))]
+    [InlineData(new[] { "A 1" }, "AB 1", nameof(DatabaseMatch.OtherProvider))]
+    public void A_database_is_compared_by_provider_and_then_by_version(string[] recorded, string database, string expected)
     {
-        Assert.Equal(expected, DatabaseCheck.Compare(recorded, database));
+        Assert.Equal(expected, DatabaseCheck.Compare(recorded, database).ToString());
     }
 
     [Fact]

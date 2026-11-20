@@ -1,7 +1,7 @@
 namespace BehaviorLock;
 
 /// <summary>State of the request that is being guarded.</summary>
-public sealed class GuardContext(string endpoint, GuardMode? mode)
+internal sealed class GuardContext(string endpoint, GuardMode? mode)
 {
     /// <summary>A context that uses the global mode.</summary>
     public GuardContext(string endpoint)
@@ -22,13 +22,13 @@ public sealed class GuardContext(string endpoint, GuardMode? mode)
     public GuardViolation? Violation { get; set; }
 }
 
-public interface IGuardContextAccessor
+internal interface IGuardContextAccessor
 {
     /// <summary>The context of the current request, or null outside a guarded request.</summary>
     GuardContext? Current { get; set; }
 }
 
-public sealed class GuardContextAccessor : IGuardContextAccessor
+internal sealed class GuardContextAccessor : IGuardContextAccessor
 {
     private readonly AsyncLocal<GuardContext?> _current = new();
 

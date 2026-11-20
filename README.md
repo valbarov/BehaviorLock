@@ -529,11 +529,17 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 
 | Interface | Purpose | Default |
 |---|---|---|
-| `IViolationSink` | Receives violations | `LoggingViolationSink` |
-| `IProfileStore` | Loads and saves the recorded profile with its `Databases`, and names its location | `JsonFileProfileStore` |
-| `ISqlNormalizer` | Reduces SQL to its shape, with the rules of a `SqlDialect`. The result must depend only on the text and the dialect, because the guard keeps it | `SqlNormalizer` |
-| `IAccessGuard` | Checks one access. Call it from your own code to guard other resources. An access with `UpTo` is a limit | `AccessGuard` |
+| `IViolationSink` | Receives violations | A sink that writes a log warning |
+| `IProfileStore` | Loads and saves the recorded profile with its `Databases`, and names its location | A JSON file at `ProfilePath` |
+| `ISqlNormalizer` | Reduces SQL to its shape, with the rules of a `SqlDialect`. The result must depend only on the text and the dialect, because the guard keeps it | The scanner of the package; see [SQL dialects](#sql-dialects) |
+| `IAccessGuard` | Checks one access. Call it from your own code to guard other resources. An access with `UpTo` is a limit | The guard of the package |
 | `IGuardModeMetadata` | Endpoint metadata that sets the mode of one endpoint | `BehaviorLockAttribute` |
+
+A sink of your own is added to the other sinks. Register your own `IProfileStore`, `ISqlNormalizer` or
+`IAccessGuard` to replace the default. The classes behind the defaults are internal.
+
+`GuardHttpHandler` is a public `DelegatingHandler` that checks each call. Put it in front of the primary handler
+of a client that the guard does not cover by itself; see [Outbound calls](#outbound-calls).
 
 ## Repository layout
 

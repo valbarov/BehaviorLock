@@ -14,13 +14,13 @@ public interface IAccessGuard
     /// <summary>
     /// Call this before a resource is touched.
     /// Throws <see cref="GuardViolationException"/> when the access must be blocked.
-    /// A limit is recorded and reported with its number rounded up; see <see cref="ResourceAccess.RoundedUp"/>.
+    /// A limit is recorded and reported with its number rounded up to 0, 1, 10, 100 and so on.
     /// A number over a limit is not blocked when <see cref="BehaviorLockOptions.EnforceLimits"/> is false.
     /// </summary>
     void Check(ResourceAccess access);
 }
 
-public sealed class AccessGuard(
+internal sealed class AccessGuard(
     IGuardContextAccessor contextAccessor,
     EndpointProfile profile,
     IEnumerable<IViolationSink> sinks,

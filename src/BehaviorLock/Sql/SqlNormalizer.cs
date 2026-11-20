@@ -29,7 +29,7 @@ public interface ISqlNormalizer
 /// reads the text both ways. When the two ways differ, it does not normalize the command.
 /// </para>
 /// </summary>
-public sealed partial class SqlNormalizer : ISqlNormalizer
+internal sealed partial class SqlNormalizer : ISqlNormalizer
 {
     // Marks a parameter while the statement is built. In the result it is '?', like a literal.
     // Only lists of parameters are reduced to one placeholder, and the mark tells them from literals.

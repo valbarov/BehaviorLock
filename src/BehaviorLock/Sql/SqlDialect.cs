@@ -25,7 +25,7 @@ public enum SqlDialect
     MySql,
 }
 
-public static class SqlDialects
+internal static class SqlDialects
 {
     /// <summary>
     /// Returns the dialect of an EF Core provider, for example <c>Npgsql.EntityFrameworkCore.PostgreSQL</c>.

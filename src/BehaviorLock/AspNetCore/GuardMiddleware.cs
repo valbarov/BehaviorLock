@@ -11,7 +11,7 @@ namespace BehaviorLock;
 /// It also checks the caller before the endpoint runs, and the size of the response body.
 /// Must run after routing, and after authentication and authorization.
 /// </summary>
-public sealed class GuardMiddleware(
+internal sealed class GuardMiddleware(
     RequestDelegate next,
     IGuardContextAccessor contextAccessor,
     EndpointProfile profile,
@@ -119,7 +119,7 @@ public sealed class GuardMiddleware(
     }
 }
 
-public static class EndpointKey
+internal static class EndpointKey
 {
     /// <summary>Returns for example <c>GET /products/{id}</c>, or null when no route matched.</summary>
     public static string? For(HttpContext http) =>

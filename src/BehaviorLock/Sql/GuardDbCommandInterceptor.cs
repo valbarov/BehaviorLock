@@ -13,7 +13,7 @@ namespace BehaviorLock;
 /// command. See <see cref="BehaviorLockOptions.SqlShapeCacheSize"/>.
 /// </para>
 /// </summary>
-public sealed class GuardDbCommandInterceptor(
+internal sealed class GuardDbCommandInterceptor(
     IAccessGuard guard,
     ISqlNormalizer normalizer,
     DatabaseCheck? databaseCheck = null,

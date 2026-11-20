@@ -7,9 +7,21 @@ namespace BehaviorLock;
 /// message handler. Inside the scope the guard checks SQL commands and outbound calls like in a request.
 /// The name of the scope takes the place of the endpoint key in the profile.
 /// </summary>
-public sealed class GuardScopes(
-    IGuardContextAccessor contextAccessor, EndpointProfile profile, IOptions<BehaviorLockOptions> options)
+public sealed class GuardScopes
 {
+    private readonly IGuardContextAccessor contextAccessor;
+    private readonly EndpointProfile profile;
+    private readonly IOptions<BehaviorLockOptions> options;
+
+    // The guard creates the one instance. Get it from the services of the app.
+    internal GuardScopes(
+        IGuardContextAccessor contextAccessor, EndpointProfile profile, IOptions<BehaviorLockOptions> options)
+    {
+        this.contextAccessor = contextAccessor;
+        this.profile = profile;
+        this.options = options;
+    }
+
     /// <summary>
     /// Starts a scope. Dispose the result to end it; the context from before then applies again.
     /// <para>
@@ -27,7 +39,7 @@ public sealed class GuardScopes(
     /// </param>
     /// <param name="mode">
     /// The mode of this scope: Off, Audit or Enforce. Null means the global mode. The global modes Off and
-    /// Learn apply to every scope, like to every endpoint. See <see cref="GuardModes.Effective"/>.
+    /// Learn apply to every scope, like to every endpoint.
     /// </param>
     /// <exception cref="ArgumentOutOfRangeException">The mode is Learn.</exception>
     public IDisposable Begin(string name, GuardMode? mode = null)

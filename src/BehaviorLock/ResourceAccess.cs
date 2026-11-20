@@ -10,7 +10,7 @@ namespace BehaviorLock;
 public sealed record ResourceAccess(string Kind, string Key)
 {
     /// <summary>The kind of an access that says who called the endpoint.</summary>
-    public const string CallerKind = "caller";
+    internal const string CallerKind = "caller";
 
     private static readonly ResourceAccess AnonymousCaller = new(CallerKind, "anonymous");
     private static readonly ResourceAccess CallerWithoutRole = new(CallerKind, "signed in, no role");
@@ -28,7 +28,7 @@ public sealed record ResourceAccess(string Kind, string Key)
     /// endpoint has an entry to compare it with: a caller, or a limit for the same thing.
     /// A profile that an older version recorded has none, and an approved SQL statement has no limit.
     /// </summary>
-    public bool OnlyCheckedWhenRecorded => UpTo is not null || Kind == CallerKind;
+    internal bool OnlyCheckedWhenRecorded => UpTo is not null || Kind == CallerKind;
 
     public static ResourceAccess Sql(string statementShape) => new("sql", statementShape);
 
@@ -128,7 +128,7 @@ public sealed record ResourceAccess(string Kind, string Key)
     /// A small change of the data then does not change the profile, and the pending file gets at most
     /// one entry per step. An access that is not a limit is returned as it is.
     /// </summary>
-    public ResourceAccess RoundedUp() => UpTo is { } number ? this with { UpTo = RoundUp(number) } : this;
+    internal ResourceAccess RoundedUp() => UpTo is { } number ? this with { UpTo = RoundUp(number) } : this;
 
     /// <summary>The form that is stored in the profile file.</summary>
     public override string ToString() => UpTo is { } number ? $"{Kind}: up to {number} {Key}" : $"{Kind}: {Key}";
