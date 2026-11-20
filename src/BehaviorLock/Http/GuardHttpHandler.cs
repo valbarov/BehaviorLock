@@ -13,6 +13,7 @@ namespace BehaviorLock;
 /// </summary>
 public sealed class GuardHttpHandler(IAccessGuard guard) : DelegatingHandler
 {
+    /// <inheritdoc />
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         if (guard.IsActive && request.RequestUri is { IsAbsoluteUri: true } uri)

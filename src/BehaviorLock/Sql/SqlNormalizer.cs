@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace BehaviorLock;
 
+/// <summary>Reduces a SQL command to the shapes of its statements. Register your own to replace the scanner of the package.</summary>
 public interface ISqlNormalizer
 {
     /// <summary>

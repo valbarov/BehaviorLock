@@ -1,0 +1,74 @@
+name: Release
+
+# Publishes the package to nuget.org when a version tag is pushed, for example v0.1.0-preview.1.
+# The tag gives the version of the package.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  publish:
+    name: Publish to nuget.org
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # Creates the GitHub release.
+      id-token: write   # Lets nuget.org trust this run: see "NuGet login" below.
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Read the version from the tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
+            echo "::error::The tag '$GITHUB_REF_NAME' is not a version. Use a tag like v1.2.3 or v1.2.3-preview.1."
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: dotnet build -c Release -p:Version=$VERSION
+
+      # The tests against real databases are skipped here. They run in the CI workflow on main.
+      - name: Test
+        run: dotnet test -c Release --no-build
+
+      - name: Pack
+        run: dotnet pack src/BehaviorLock -c Release --no-build -p:Version=$VERSION -o artifacts
+
+      # Trusted publishing: nuget.org gives a key that is valid for one hour to the workflow that its
+      # policy names. No long-lived key is stored in this repository.
+      # See https://learn.microsoft.com/nuget/nuget-org/trusted-publishing
+      - name: NuGet login
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      # The symbol package next to the package is pushed with it.
+      - name: Push to nuget.org
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags="--generate-notes --verify-tag"
+          if [[ "$VERSION" == *-* ]]; then
+            flags="$flags --prerelease"
+          fi
+          gh release create "$GITHUB_REF_NAME" artifacts/* --title "$GITHUB_REF_NAME" $flags

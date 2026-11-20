@@ -16,6 +16,7 @@ public sealed partial class EndpointProfile
     private readonly SortedSet<string> _databases = new(StringComparer.Ordinal);
     private readonly Lock _lock = new();
 
+    /// <summary>Creates an empty profile.</summary>
     public EndpointProfile()
     {
     }
@@ -50,6 +51,7 @@ public sealed partial class EndpointProfile
         }
     }
 
+    /// <summary>Adds a database to <see cref="Databases"/>. A profile store calls it when it loads a profile.</summary>
     public void AddDatabase(string database)
     {
         lock (_lock)
@@ -207,6 +209,7 @@ public sealed partial class EndpointProfile
         return new EndpointProfile(rest);
     }
 
+    /// <summary>True when the profile has this endpoint, also when the endpoint has no accesses.</summary>
     public bool ContainsEndpoint(string endpoint)
     {
         lock (_lock)

@@ -3,6 +3,10 @@ using Microsoft.Extensions.Options;
 
 namespace BehaviorLock;
 
+/// <summary>
+/// Loads and saves the recorded profile. Register your own store to keep the profile in another place
+/// than a JSON file.
+/// </summary>
 public interface IProfileStore
 {
     /// <summary>Where the profile is stored, for example a full file path. Used in log and error messages.</summary>
@@ -11,6 +15,7 @@ public interface IProfileStore
     /// <summary>Loads the profile. Returns an empty profile when none is stored.</summary>
     EndpointProfile Load();
 
+    /// <summary>Saves the profile with its <see cref="EndpointProfile.Databases"/>. Learn mode calls it when the host stops.</summary>
     void Save(EndpointProfile profile);
 }
 

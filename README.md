@@ -63,6 +63,14 @@ A profile looks like this (see the full one in [samples/SampleApi/behavior.lock.
 The `$database` entry names the database provider that the profile was recorded with.
 See [Record with the database of production](#record-with-the-database-of-production).
 
+## Install
+
+```
+dotnet add package BehaviorLock --prerelease
+```
+
+The package is for .NET 10 with EF Core 10, and for .NET 11 with EF Core 11.
+
 ## Quick start
 
 ```csharp
@@ -587,6 +595,24 @@ dotnet test --filter "FullyQualifiedName~RealDatabaseTests"
 ```
 
 The tests drop and create a table with the name `Users`, so use them only with a test database.
+
+### Release
+
+A version tag publishes the package to nuget.org and creates a GitHub release. The tag gives the version:
+
+```
+git tag v0.1.0-preview.1
+git push origin v0.1.0-preview.1
+```
+
+The [release workflow](.github/workflows/release.yml) uses
+[trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing), so the repository stores no
+API key. It needs two things, set up once:
+
+- On nuget.org, a trusted publishing policy for this repository with the workflow file `release.yml`.
+- In the repository, the secret `NUGET_USER` with the nuget.org user name of the package owner.
+
+Each pull request also packs the library. The package is an artifact of the CI run.
 
 ## Performance
 

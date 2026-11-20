@@ -9,6 +9,9 @@ namespace BehaviorLock;
 /// With a limit it stops the first write that would pass the limit, so the client never gets more
 /// bytes than the limit. It also stops every write of a request that the guard has already blocked.
 /// </summary>
+/// <param name="inner">The response body of the server.</param>
+/// <param name="guard">Checks the size against the limit of the endpoint.</param>
+/// <param name="context">The context of the request.</param>
 /// <param name="limit">
 /// The size that no write may pass, or null to stop no write. Only a request that blocks limits has one.
 /// Every other request reports the full size once, when it has finished.

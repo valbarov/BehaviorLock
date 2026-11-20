@@ -1,5 +1,6 @@
 namespace BehaviorLock;
 
+/// <summary>What the guard does with an access that is not in the profile.</summary>
 public enum GuardMode
 {
     /// <summary>The guard does nothing.</summary>
@@ -15,8 +16,13 @@ public enum GuardMode
     Enforce,
 }
 
+/// <summary>The options of the guard. Bind them to the configuration section <c>BehaviorLock</c>.</summary>
 public sealed class BehaviorLockOptions
 {
+    /// <summary>
+    /// The global mode. The default is <see cref="GuardMode.Audit"/>. One endpoint or route group can have
+    /// its own mode; see <see cref="BehaviorLockAttribute"/>.
+    /// </summary>
     public GuardMode Mode { get; set; } = GuardMode.Audit;
 
     /// <summary>
