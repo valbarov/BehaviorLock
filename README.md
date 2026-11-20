@@ -9,7 +9,7 @@ It does not look for known attack patterns. It only knows the legal behavior, so
 bugs that nobody has seen before, as long as they change what the endpoint touches, who calls it, or how
 much it returns.
 
-> Status: MVP. It targets .NET 11 and covers EF Core and `HttpClient`. Read [Known limits](#known-limits) before you use it.
+> Status: MVP. It targets .NET 10 and .NET 11, and it covers EF Core and `HttpClient`. Read [Known limits](#known-limits) before you use it.
 
 ## How it works
 
@@ -550,8 +550,12 @@ perf/BehaviorLock.LoadTest   Load test that compares the API with and without th
 dotnet test
 ```
 
-The test run rewrites `samples/SampleApi/behavior.lock.json`. A diff in that file after a test run
-means the behavior of an endpoint changed.
+The tests run once for .NET 10 with EF Core 10, and once for .NET 11 with EF Core 11. You need both runtimes.
+To run the tests of one version only, add `-f net11.0` or `-f net10.0`.
+
+The test run for .NET 11 rewrites `samples/SampleApi/behavior.lock.json`. A diff in that file after a test run
+means the behavior of an endpoint changed. The test run for .NET 10 records its own profile next to the test
+assembly, because the profile holds the version of the database provider.
 
 ### Tests against real MySQL and PostgreSQL servers
 
