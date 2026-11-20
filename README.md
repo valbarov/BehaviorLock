@@ -1,5 +1,7 @@
 # BehaviorLock
 
+[![CI](https://github.com/valbarov/BehaviorLock/actions/workflows/ci.yml/badge.svg)](https://github.com/valbarov/BehaviorLock/actions/workflows/ci.yml)
+
 Active security for ASP.NET Core APIs. BehaviorLock records what each endpoint does when it handles legal
 requests. In production it blocks every request that makes an endpoint do something else.
 
