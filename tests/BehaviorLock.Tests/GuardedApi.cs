@@ -1,8 +1,12 @@
 using System.Collections.Concurrent;
+using System.Runtime.ExceptionServices;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SampleApi;
 
 namespace BehaviorLock.Tests;
@@ -14,6 +18,7 @@ public sealed class GuardedApi : WebApplicationFactory<Program>
     private readonly string _profilePath;
     private readonly string _connectionString = $"Data Source=guard-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
     private readonly SqliteConnection _keepAlive;
+    private readonly StartupFailure _startupFailure = new();
 
     public GuardedApi(GuardMode mode, string profilePath)
     {
@@ -52,6 +57,7 @@ public sealed class GuardedApi : WebApplicationFactory<Program>
                 Configure?.Invoke(options);
             });
             services.AddSingleton<IViolationSink>(Violations);
+            services.AddSingleton<ILoggerProvider>(_startupFailure);
             services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => Outbound));
         });
     }
@@ -63,6 +69,28 @@ public sealed class GuardedApi : WebApplicationFactory<Program>
         return await query(scope.ServiceProvider.GetRequiredService<ShopDb>());
     }
 
+    /// <summary>
+    /// Makes a failed start of the app give the exception of the app, every time.
+    /// <para>
+    /// The app runs on its own thread. When its start fails, it disposes its services. This thread asks the
+    /// same services for the lifetime of the app, to wait for the start. Most times it asks first, waits, and
+    /// gets the exception of the app. When the app is faster, it gets an ObjectDisposedException in its place.
+    /// The host has logged the exception of the app before it disposed the services, so it is known here.
+    /// </para>
+    /// </summary>
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        try
+        {
+            return base.CreateHost(builder);
+        }
+        catch (ObjectDisposedException) when (_startupFailure.Exception is { } failure)
+        {
+            ExceptionDispatchInfo.Capture(failure).Throw();
+            throw;
+        }
+    }
+
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
@@ -70,6 +98,35 @@ public sealed class GuardedApi : WebApplicationFactory<Program>
         {
             _keepAlive.Dispose();
         }
+    }
+}
+
+/// <summary>Keeps the exception that the host logs when the app fails at startup.</summary>
+internal sealed class StartupFailure : ILoggerProvider, ILogger
+{
+    private Exception? _exception;
+
+    public Exception? Exception => Volatile.Read(ref _exception);
+
+    public ILogger CreateLogger(string categoryName) =>
+        categoryName.StartsWith("Microsoft.Extensions.Hosting", StringComparison.Ordinal) ? this : NullLogger.Instance;
+
+    public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Error;
+
+    public void Log<TState>(
+        LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        if (logLevel >= LogLevel.Error && exception is not null)
+        {
+            Interlocked.CompareExchange(ref _exception, exception, null);
+        }
+    }
+
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull => null;
+
+    public void Dispose()
+    {
     }
 }
 
