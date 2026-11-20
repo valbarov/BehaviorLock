@@ -1,6 +1,9 @@
 namespace BehaviorLock;
 
-/// <summary>Endpoint metadata that sets the guard mode of one endpoint. See <see cref="GuardModes.Effective"/>.</summary>
+/// <summary>
+/// Endpoint metadata that sets the guard mode of one endpoint. The global mode Off or Learn applies to every
+/// endpoint. With the global mode Audit or Enforce, the mode of the endpoint applies.
+/// </summary>
 public interface IGuardModeMetadata
 {
     GuardMode Mode { get; }

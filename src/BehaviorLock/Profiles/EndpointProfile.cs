@@ -36,7 +36,8 @@ public sealed partial class EndpointProfile
     /// <summary>
     /// The databases that the profile was recorded with, for example
     /// <c>Microsoft.EntityFrameworkCore.Sqlite 11.0.0</c>. Empty when the recording made no SQL access.
-    /// A profile store must keep them with the profile. See <see cref="DatabaseCheck"/>.
+    /// A profile store must keep them with the profile, because the guard compares them with the database
+    /// of the app at startup.
     /// </summary>
     public IReadOnlyCollection<string> Databases
     {
@@ -58,7 +59,7 @@ public sealed partial class EndpointProfile
     }
 
     /// <summary>Registers an endpoint, also when it touches no resources.</summary>
-    public void AddEndpoint(string endpoint)
+    internal void AddEndpoint(string endpoint)
     {
         lock (_lock)
         {
@@ -103,7 +104,7 @@ public sealed partial class EndpointProfile
     }
 
     /// <summary>Returns the highest allowed number of this limit, or null when the profile does not have the limit.</summary>
-    public long? LimitOf(string endpoint, ResourceAccess limit)
+    internal long? LimitOf(string endpoint, ResourceAccess limit)
     {
         lock (_lock)
         {
@@ -117,7 +118,7 @@ public sealed partial class EndpointProfile
     /// with any number, for another access any access of the same kind.
     /// See <see cref="ResourceAccess.OnlyCheckedWhenRecorded"/>.
     /// </summary>
-    public bool HasEntryLike(string endpoint, ResourceAccess access)
+    internal bool HasEntryLike(string endpoint, ResourceAccess access)
     {
         lock (_lock)
         {
@@ -172,7 +173,7 @@ public sealed partial class EndpointProfile
     /// Adds all endpoints and accesses of the other profile. Of two limits for the same thing, the higher one stays.
     /// Returns the number of accesses that are new or higher.
     /// </summary>
-    public int Merge(EndpointProfile other)
+    internal int Merge(EndpointProfile other)
     {
         var source = other.ToDictionary();
 
@@ -190,7 +191,7 @@ public sealed partial class EndpointProfile
     }
 
     /// <summary>Returns a new profile with the accesses of this profile that the other profile does not allow.</summary>
-    public EndpointProfile Except(EndpointProfile other)
+    internal EndpointProfile Except(EndpointProfile other)
     {
         var rest = new Dictionary<string, string[]>(StringComparer.Ordinal);
 

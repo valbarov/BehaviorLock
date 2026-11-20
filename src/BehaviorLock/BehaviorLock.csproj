@@ -19,6 +19,12 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!-- The public types are the ones that an app uses. The tests and the load test also use the rest. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="BehaviorLock.Tests" />
+    <InternalsVisibleTo Include="BehaviorLock.LoadTest" />
+  </ItemGroup>
+
   <!-- Each .NET version gets the EF Core of the same major version. The lowest patch, so the app chooses its own. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.0" />

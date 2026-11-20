@@ -8,7 +8,7 @@ public interface IViolationSink
     void Report(GuardViolation violation);
 }
 
-public sealed class LoggingViolationSink(ILogger<LoggingViolationSink> logger) : IViolationSink
+internal sealed class LoggingViolationSink(ILogger<LoggingViolationSink> logger) : IViolationSink
 {
     public void Report(GuardViolation violation) =>
         logger.LogWarning(

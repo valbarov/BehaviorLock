@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Options;
 
 namespace BehaviorLock;
 
@@ -32,7 +33,10 @@ public static class BehaviorLockExtensions
         });
         services.TryAddSingleton<ISqlNormalizer, SqlNormalizer>();
         services.TryAddSingleton<IAccessGuard, AccessGuard>();
-        services.TryAddSingleton<GuardScopes>();
+        services.TryAddSingleton(provider => new GuardScopes(
+            provider.GetRequiredService<IGuardContextAccessor>(),
+            provider.GetRequiredService<EndpointProfile>(),
+            provider.GetRequiredService<IOptions<BehaviorLockOptions>>()));
         services.TryAddSingleton<DatabaseCheck>();
         services.TryAddSingleton<GuardDbCommandInterceptor>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IViolationSink, LoggingViolationSink>());

@@ -15,7 +15,7 @@ public interface IProfileStore
 }
 
 /// <summary>Stores the profile as a readable JSON file: endpoint key → sorted list of accesses.</summary>
-public sealed class JsonFileProfileStore(IOptions<BehaviorLockOptions> options, IHostEnvironment environment) : IProfileStore
+internal sealed class JsonFileProfileStore(IOptions<BehaviorLockOptions> options, IHostEnvironment environment) : IProfileStore
 {
     /// <summary>The full path of the profile file. A relative path is resolved against the content root.</summary>
     public string Location => ProfileFile.Resolve(options.Value.ProfilePath, environment);

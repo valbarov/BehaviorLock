@@ -1,7 +1,7 @@
 namespace BehaviorLock;
 
 /// <summary>Rules for the mode of one endpoint.</summary>
-public static class GuardModes
+internal static class GuardModes
 {
     /// <summary>
     /// Returns the mode that applies to one endpoint.

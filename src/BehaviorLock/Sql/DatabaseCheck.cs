@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace BehaviorLock;
 
 /// <summary>How the database of the app compares with the databases that the profile was recorded with.</summary>
-public enum DatabaseMatch
+internal enum DatabaseMatch
 {
     /// <summary>The profile names no database, so nothing can be compared.</summary>
     NotRecorded,
@@ -25,7 +25,7 @@ public enum DatabaseMatch
 }
 
 /// <summary>The result for one database, for example <c>Microsoft.EntityFrameworkCore.Sqlite 11.0.0</c>.</summary>
-public sealed record DatabaseCheckResult(DatabaseMatch Match, string Database)
+internal sealed record DatabaseCheckResult(DatabaseMatch Match, string Database)
 {
     /// <summary>How this database reads strings and comments. The SQL normalizer needs it.</summary>
     public SqlDialect Dialect { get; } = SqlDialects.FromProvider(Database);
@@ -36,7 +36,7 @@ public sealed record DatabaseCheckResult(DatabaseMatch Match, string Database)
 /// recorded with one provider matches nothing on another one. Learn mode records the provider.
 /// The other modes compare it with the provider that the app uses.
 /// </summary>
-public sealed class DatabaseCheck(
+internal sealed class DatabaseCheck(
     EndpointProfile profile,
     IOptions<BehaviorLockOptions> options,
     ILogger<DatabaseCheck> logger)
