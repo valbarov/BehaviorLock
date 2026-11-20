@@ -6,6 +6,7 @@ namespace BehaviorLock;
 /// </summary>
 public interface IGuardModeMetadata
 {
+    /// <summary>The mode of the endpoint: Off, Audit or Enforce.</summary>
     GuardMode Mode { get; }
 }
 

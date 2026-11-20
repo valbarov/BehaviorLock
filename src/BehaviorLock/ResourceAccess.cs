@@ -30,8 +30,13 @@ public sealed record ResourceAccess(string Kind, string Key)
     /// </summary>
     internal bool OnlyCheckedWhenRecorded => UpTo is not null || Kind == CallerKind;
 
+    /// <summary>One SQL statement, reduced to its shape; see <see cref="ISqlNormalizer"/>.</summary>
     public static ResourceAccess Sql(string statementShape) => new("sql", statementShape);
 
+    /// <summary>
+    /// One outbound HTTP call. The authority is scheme, host and port, for example
+    /// <c>https://hooks.example.com</c>. The path is not part of it.
+    /// </summary>
     public static ResourceAccess Http(string method, string authority) => new("http", $"{method} {authority}");
 
     /// <summary>
@@ -154,8 +159,13 @@ public sealed record ResourceAccess(string Kind, string Key)
 /// <summary>An access that is not in the profile of its endpoint.</summary>
 public sealed record GuardViolation(string Endpoint, ResourceAccess Access, bool Blocked);
 
+/// <summary>
+/// Thrown in the code that made an access which the guard blocked. The middleware turns it into a 403.
+/// In a guard scope there is no response, so the code of the scope gets it.
+/// </summary>
 public sealed class GuardViolationException(GuardViolation violation)
     : Exception($"BehaviorLock blocked '{violation.Access}' for endpoint '{violation.Endpoint}'.")
 {
+    /// <summary>The access that was blocked, and its endpoint or scope.</summary>
     public GuardViolation Violation { get; } = violation;
 }

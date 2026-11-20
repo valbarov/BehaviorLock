@@ -7,13 +7,39 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <PackageId>BehaviorLock</PackageId>
+    <!-- The release workflow takes the version from the git tag. This one is for a local pack. -->
+    <Version>0.1.0-preview.1</Version>
     <Authors>Vadim Albarov</Authors>
     <Copyright>Copyright 2026 Vadim Albarov</Copyright>
     <Description>Active security for ASP.NET Core APIs. Records what each endpoint touches and blocks everything else.</Description>
+    <PackageTags>aspnetcore;security;efcore;httpclient;sql-injection;ssrf;allowlist;rasp</PackageTags>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/valbarov/BehaviorLock</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/valbarov/BehaviorLock</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- The XML file gives the doc comments to the editor of the app. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- A debugger can step into the source: the symbols are a package of their own and point to the commit. -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <!-- Fails the pack when the two target frameworks do not have the same public types. -->
+    <EnablePackageValidation>true</EnablePackageValidation>
+  </PropertyGroup>
+
+  <!-- The package has a short readme of its own. The links of the long one only work on GitHub. -->
+  <ItemGroup>
+    <None Include="PACKAGE.md" Pack="true" PackagePath="README.md" />
+  </ItemGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

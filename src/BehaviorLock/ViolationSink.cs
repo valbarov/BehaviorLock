@@ -5,6 +5,10 @@ namespace BehaviorLock;
 /// <summary>Receives every violation. Register more sinks to send alerts to other systems.</summary>
 public interface IViolationSink
 {
+    /// <summary>
+    /// Called for each access that is not in the profile, before a blocked access throws. It runs on the
+    /// thread of the request, so it must be fast and must not throw.
+    /// </summary>
     void Report(GuardViolation violation);
 }
 

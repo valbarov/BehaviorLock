@@ -2,6 +2,10 @@ using Microsoft.Extensions.Options;
 
 namespace BehaviorLock;
 
+/// <summary>
+/// Checks one resource access against the profile of the current endpoint or scope.
+/// Call it from your own code to guard a resource that the package does not cover.
+/// </summary>
 public interface IAccessGuard
 {
     /// <summary>

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace BehaviorLock;
 
+/// <summary>Adds the guard to the services, the request pipeline, a <c>DbContext</c> and single endpoints.</summary>
 public static class BehaviorLockExtensions
 {
     /// <summary>

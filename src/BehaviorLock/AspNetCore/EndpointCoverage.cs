@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace BehaviorLock;
 
+/// <summary>Finds the endpoints that the profile does not cover.</summary>
 public static class EndpointCoverage
 {
     /// <summary>

@@ -87,6 +87,17 @@ jobs:
       - name: The recorded profile has no change
         run: git diff --exit-code -- samples/SampleApi/behavior.lock.json
 
+      # The pack fails when the package is not complete, or when the two target frameworks do not have
+      # the same public types. The release workflow makes the package in the same way.
+      - name: Pack
+        run: dotnet pack src/BehaviorLock -c Release --no-build -o artifacts
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package
+          path: artifacts/*
+          if-no-files-found: error
+
   windows:
     name: Test on Windows
     runs-on: windows-latest
