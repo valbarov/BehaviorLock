@@ -12,13 +12,15 @@ namespace BehaviorLock.Tests;
 /// A tiny API on a test server for the checks of the middleware: the caller and the size of the response.
 /// It needs no database. The profile file is in a temporary directory.
 /// <para>
-/// The header <c>X-User</c> signs the caller in. The header <c>X-Roles</c> gives the roles of that caller.
+/// The header <c>X-User</c> signs the caller in. The header <c>X-Roles</c> gives the roles of that caller,
+/// and the header <c>X-Scope</c> its <c>scope</c> claim.
 /// </para>
 /// </summary>
 public sealed class TinyApi : IAsyncDisposable
 {
     public const string UserHeader = "X-User";
     public const string RolesHeader = "X-Roles";
+    public const string ScopeHeader = "X-Scope";
 
     private readonly string _directory;
     private readonly WebApplication _app;
@@ -70,6 +72,13 @@ public sealed class TinyApi : IAsyncDisposable
                 var claims = http.Request.Headers[RolesHeader].ToString()
                     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Select(role => new Claim(ClaimTypes.Role, role));
+
+                // One claim with all scopes, divided by spaces, as a token has it.
+                if (http.Request.Headers.TryGetValue(ScopeHeader, out var scope))
+                {
+                    claims = claims.Append(new Claim("scope", scope.ToString()));
+                }
+
                 http.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
             }
 
@@ -116,12 +125,17 @@ public sealed class TinyApi : IAsyncDisposable
     }
 
     /// <summary>Sends a GET request. Null roles mean an anonymous caller, and an empty text a caller without a role.</summary>
-    public Task<HttpResponseMessage> GetAsync(string url, string? roles = null)
+    public Task<HttpResponseMessage> GetAsync(string url, string? roles = null, string? scope = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, url);
         if (roles is not null)
         {
             request.Headers.Add(UserHeader, "test");
+        }
+
+        if (scope is not null)
+        {
+            request.Headers.Add(ScopeHeader, scope);
         }
 
         if (!string.IsNullOrEmpty(roles))

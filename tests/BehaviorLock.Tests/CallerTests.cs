@@ -100,6 +100,72 @@ public sealed class CallerTests
         Assert.DoesNotContain(api.Profile.ToDictionary()[Endpoint], entry => entry.StartsWith("caller:"));
     }
 
+    [Theory]
+    [InlineData("", "orders.read", "signed in, no role, scope orders.read")]
+    [InlineData("admin", "orders.write  orders.read", "signed in, role admin, scope orders.read, scope orders.write")]
+    [InlineData("admin", null, "signed in, role admin")]
+    public async Task Learn_mode_records_the_claims_that_the_option_names(string roles, string? scope, string expected)
+    {
+        await using var api = await TinyApi.StartAsync(GuardMode.Learn, "{}", options => options.CallerClaims.Add("scope"));
+
+        using var response = await api.GetAsync("/whoami", roles, scope);
+
+        Assert.Contains($"caller: {expected}", api.Profile.ToDictionary()[Endpoint]);
+    }
+
+    [Fact]
+    public async Task A_claim_is_not_part_of_the_caller_without_the_option()
+    {
+        await using var api = await TinyApi.StartAsync(GuardMode.Learn, "{}");
+
+        using var response = await api.GetAsync("/whoami", "admin", "orders.read");
+
+        Assert.Contains("caller: signed in, role admin", api.Profile.ToDictionary()[Endpoint]);
+    }
+
+    [Theory]
+    [InlineData("orders.read", HttpStatusCode.OK)]
+    [InlineData("orders.read orders.write", HttpStatusCode.Forbidden)]
+    [InlineData("orders.write", HttpStatusCode.Forbidden)]
+    [InlineData(null, HttpStatusCode.Forbidden)]
+    public async Task A_caller_with_other_claim_values_is_blocked(string? scope, HttpStatusCode expected)
+    {
+        const string readOnly = """{ "GET /whoami": [ "caller: signed in, no role, scope orders.read" ] }""";
+        await using var api = await TinyApi.StartAsync(GuardMode.Enforce, readOnly, options => options.CallerClaims.Add("scope"));
+
+        using var response = await api.GetAsync("/whoami", "", scope);
+
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Equal(expected == HttpStatusCode.OK ? 1 : 0, api.Calls);
+    }
+
+    [Fact]
+    public void Claims_of_several_types_are_sorted_by_type_and_value()
+    {
+        var identity = new ClaimsIdentity(
+            [
+                new Claim("tenant", "b"),
+                new Claim("scope", "write read"),
+                new Claim("scope", "read"),
+                new Claim("tenant", "a"),
+                new Claim("email", "alice@example.com"),
+                new Claim(ClaimTypes.Role, "admin"),
+            ],
+            "Bearer");
+
+        var caller = ResourceAccess.Caller(new ClaimsPrincipal(identity), ["tenant", "scope"]);
+
+        Assert.Equal("caller: signed in, role admin, scope read, scope write, tenant a, tenant b", caller.ToString());
+    }
+
+    [Fact]
+    public void Claims_of_an_identity_that_is_not_signed_in_do_not_count()
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim("scope", "orders.read")]));
+
+        Assert.Equal("caller: anonymous", ResourceAccess.Caller(user, ["scope"]).ToString());
+    }
+
     [Fact]
     public void An_identity_that_is_not_signed_in_gives_an_anonymous_caller()
     {

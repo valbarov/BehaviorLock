@@ -83,6 +83,24 @@ public sealed class RowLimitTests(ProfileFixture fixture) : IDisposable
     }
 
     [Fact]
+    public async Task A_command_that_returns_more_rows_is_only_reported_when_limits_are_not_enforced()
+    {
+        await using var api = await CreateLargeShop(GuardMode.Enforce, configure: options => options.EnforceLimits = false);
+        var client = api.CreateClient();
+
+        var body = await client.GetStringAsync(Wildcard);
+        using var injection = await Attacks.All[Attacks.UnionRead].Send(client);
+
+        // The limits are report-only, but a new statement is still blocked.
+        Assert.Contains("Cable 20", body);
+        Assert.Equal(HttpStatusCode.Forbidden, injection.StatusCode);
+        Assert.Equal(
+            [new GuardViolation(Endpoint, MoreRows, Blocked: false), new GuardViolation(Endpoint, LargerResponse, Blocked: false)],
+            api.Violations.Items.Take(2));
+        Assert.True(api.Violations.Items.Last().Blocked);
+    }
+
+    [Fact]
     public async Task Approved_limits_let_the_larger_result_pass()
     {
         // A person decides that a search can return up to 100 rows, and copies the entries of the pending file.

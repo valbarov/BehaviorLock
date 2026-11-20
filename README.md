@@ -101,7 +101,10 @@ app.UseBehaviorLock();
 | `PendingPath` | Not set | The file where the guard writes unknown accesses. Not set means that no file is written |
 | `PendingLimit` | `1000` | The largest number of accesses in the pending file |
 | `CheckCallers` | `true` | Records and checks the kind of caller. See [Callers](#callers) |
+| `CallerClaims` | Empty | More claim types that are part of the kind of caller, for example `scope`. See [Callers](#callers) |
 | `CheckLimits` | `true` | Records and checks the rows and the response size. See [Limits](#limits) |
+| `EnforceLimits` | `true` | `false` means that a number over a limit is reported, but never blocked. See [Limits](#limits) |
+| `SqlShapeCacheSize` | `1000` | The number of SQL command texts whose shapes the guard keeps. `0` turns the cache off. See [Performance](#performance) |
 
 A relative path is resolved against the content root of the app.
 
@@ -160,6 +163,7 @@ before the endpoint runs.
 | Not signed in | `caller: anonymous` |
 | Signed in, without a role | `caller: signed in, no role` |
 | Signed in, with roles | `caller: signed in, role admin, role support` |
+| Signed in, with the claims of `CallerClaims` | `caller: signed in, no role, scope orders.read, scope orders.write` |
 
 This finds an endpoint that forgot its own check. In the sample, `GET /admin/orders` only asks for a
 signed-in caller. The tests call it as an admin, so the profile has `caller: signed in, role admin`.
@@ -168,6 +172,17 @@ A normal user gets a 403 from the guard.
 - **The whole list of roles must match.** A recording with a caller that has the roles `admin` and `support`
   does not allow a caller that has only `support`. Send one legal request for each legal kind of caller.
 - **The roles are the role claims of the signed-in user**, sorted by name.
+- **Other claims can be part of the caller.** Many APIs use the `scope` claim of a token in place of roles.
+  Name such claim types in `CallerClaims`. Their values follow the roles, sorted by type and value. A value
+  with spaces counts as a list, so `orders.read orders.write` gives two parts. Like the roles, the whole
+  list must match.
+
+  ```json
+  "BehaviorLock": { "CallerClaims": [ "scope" ] }
+  ```
+
+  Use only claims with few values. A claim that differs for each user, such as the user id or the email,
+  gives one kind of caller per user. A change of `CallerClaims` changes the entries, so record the profile again.
 - **The guard does not replace authorization.** It runs after it, and it sees only the requests that the
   app lets through.
 - **Add the middleware after `UseAuthentication` and `UseAuthorization`.** Before authentication, every
@@ -192,13 +207,26 @@ table with the same statement. The guard records two numbers for this, and it st
 saw. So a small change of the test data does not change the profile.
 
 **The limits come from your test data.** A test database is small, so the recorded limits are often lower
-than the legal numbers of production. Do this before you use `Enforce` mode:
+than the legal numbers of production. Do this before the limits block requests:
 
 1. Run `Audit` mode with a pending file. See [Find the gaps in production](#find-the-gaps-in-production).
 2. The pending file gets one entry per limit, with the highest step that a request needed, for example
    `rows: up to 1000 from SELECT * FROM Products WHERE Name LIKE ?`.
 3. Decide what is legal and copy the entry to the approved file. You can write any number, for example
    `up to 5000`. Of two limits for the same thing, the higher one applies.
+
+**You can enforce everything else first.** Set `EnforceLimits` to `false`. In `Enforce` mode the guard then
+still blocks a new SQL shape, a new host and a new kind of caller. A number over a limit is only reported
+and written to the pending file, and the request goes on. Set the option back to `true` when the pending
+file gets no more limits.
+
+```json
+"BehaviorLock": {
+  "Mode": "Enforce",
+  "EnforceLimits": false,
+  "PendingPath": "/var/lib/shop/behavior.lock.pending.json"
+}
+```
 
 What a blocked request looks like:
 
@@ -224,6 +252,46 @@ Things to know:
 - In `Enforce` mode, a response with a size limit starts at its first write or flush. A call to
   `Response.StartAsync` alone does not send the headers.
 - Set `CheckLimits` to `false` to turn both limits off.
+
+## Background jobs
+
+The guard checks a request because the middleware opens a context for it. Code outside a request has no
+context: a background job, a message handler, a timer. Open a scope there, and the guard checks the SQL
+commands and the outbound calls of that code too.
+
+```csharp
+public sealed class NightlyCleanup(GuardScopes scopes, IServiceScopeFactory services) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stop)
+    {
+        using var guarded = scopes.Begin("job nightly-cleanup");
+        using var scope = services.CreateScope();
+
+        var db = scope.ServiceProvider.GetRequiredService<ShopDb>();
+        await db.Orders.Where(order => order.Total == 0).ExecuteDeleteAsync(stop);
+    }
+}
+```
+
+The name of the scope is its key in the profile, in the place of the endpoint key:
+
+```json
+"job nightly-cleanup": [
+  "sql: DELETE FROM \"Orders\" AS \"o\" WHERE \"o\".\"Total\" = ?"
+]
+```
+
+- **Record the job like an endpoint.** A test runs it once in `Learn` mode, for each legal path.
+- **A blocked access throws `GuardViolationException`** in the code of the job. There is no response that
+  could become a 403. The violation goes to the sinks and to the pending file as usual.
+- **A scope can have its own mode**: `scopes.Begin("job nightly-cleanup", GuardMode.Audit)`. The rules are the
+  rules of [Mode per endpoint](#mode-per-endpoint).
+- **Use a name that no endpoint has.** A scope with the key of an endpoint shares the profile of that endpoint.
+- **Call `Begin` in the method that does the work.** A context that an `async` method sets is not visible
+  to its caller. Dispose the scope to end it; the context from before then applies again.
+- A scope has no caller and no response, so it has no `caller:` and no `response:` entry. Row limits work.
+- `EndpointCoverage.FindUnprofiled` does not know the scopes. A scope without a profile can touch nothing
+  in `Enforce` mode, so a forgotten recording shows itself at the first run.
 
 ## Deploy the profile
 
@@ -398,7 +466,8 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 - **Only EF Core and `IHttpClientFactory` are covered.** Dapper, raw ADO.NET, a directly created `HttpClient`,
   file access and process start are not checked.
 - **HTTP redirects are not checked.** A legal host that redirects to another host passes.
-- **Code outside a request is not checked**, for example startup code and background jobs.
+- **Code outside a request is checked only inside a scope.** Startup code and a background job without a
+  scope are not checked. See [Background jobs](#background-jobs).
 - **No request-wide rollback.** A blocked access never runs, but earlier writes of the same request stay,
   unless the app uses its own transaction.
 - **The profile records what the code does, not what it should do.** If a legal request triggers a harmful
@@ -428,7 +497,7 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 |---|---|---|
 | `IViolationSink` | Receives violations | `LoggingViolationSink` |
 | `IProfileStore` | Loads and saves the recorded profile with its `Databases`, and names its location | `JsonFileProfileStore` |
-| `ISqlNormalizer` | Reduces SQL to its shape, with the rules of a `SqlDialect` | `SqlNormalizer` |
+| `ISqlNormalizer` | Reduces SQL to its shape, with the rules of a `SqlDialect`. The result must depend only on the text and the dialect, because the guard keeps it | `SqlNormalizer` |
 | `IAccessGuard` | Checks one access. Call it from your own code to guard other resources. An access with `UpTo` is a limit | `AccessGuard` |
 | `IGuardModeMetadata` | Endpoint metadata that sets the mode of one endpoint | `BehaviorLockAttribute` |
 
@@ -437,7 +506,7 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 ```
 src/BehaviorLock            The library
 samples/SampleApi            Shop API with deliberate weaknesses, plus its recorded profile
-tests/BehaviorLock.Tests    Unit tests, legal requests, attacks, pending and approved files, mode per endpoint, callers, limits
+tests/BehaviorLock.Tests    Unit tests, legal requests, attacks, pending and approved files, mode per endpoint, callers, limits, scopes
 perf/BehaviorLock.LoadTest   Load test that compares the API with and without the guard
 ```
 
@@ -492,28 +561,39 @@ same API without the package:
 
 | Scenario | Requests/s without the package | Change in `Enforce` mode |
 |---|---:|---|
-| No resource access | 99,000 | About 2% lower, but no clear difference (the rounds go from -7% to +23%) |
-| One EF Core query | 23,700 | About 3% lower |
-| One raw SQL query | 24,100 | Between 0% and 2% lower |
-| EF Core query + `UPDATE`, one connection | 470 | About 4% lower |
-| One outbound HTTP call | 96,000 | About 4% lower |
-| SQL injection, blocked with a 403 | 24,200 | About 4% lower |
+| No resource access | 65,800 | About 4% lower |
+| One EF Core query | 16,500 | No clear difference (the median is +1%, the rounds go from -20% to +5%) |
+| One raw SQL query | 18,200 | No clear difference (the median is -3%, the rounds go from -38% to +47%) |
+| EF Core query + `UPDATE`, one connection | 440 | About 3% lower (the rounds go from -6% to +4%) |
+| One outbound HTTP call | 61,900 | About 4% lower |
+| SQL injection, blocked with a 403 | 16,500 | No clear difference (the median is +5%, the rounds go from -2% to +8%) |
 
-The latency percentiles (p50, p95, p99) differ by 0.2 ms or less in every scenario.
+The latency percentiles (p50, p95, p99) differ by 0.3 ms or less in every scenario.
 
-The guard's own work per SQL command is small: 0.3 to 0.5 µs to normalize the statement and 0.1 µs to check
-it, with about 770 bytes allocated. A command with a reader is normalized two times: before it runs, and
-when its reader closes.
+The guard keeps the shapes of the SQL command texts that passed. An app sends the same few texts again and
+again, so most commands are not normalized:
+
+| Work for one SQL command | Time | Allocated |
+|---|---:|---:|
+| A text that the guard knows: one lookup and one check | About 0.4 µs | 216 bytes |
+| A new text: normalize it first | 0.3 to 0.6 µs more | About 770 bytes more |
+
+- The row check at the end of a command uses the same kept shape.
+- The cache keeps at most `SqlShapeCacheSize` texts (default 1000) and about 4 MB of text. When it is full, it
+  starts again from empty. A text of more than 20,000 characters is never kept.
+- In `Enforce` mode a blocked command is never kept, so the texts of an attacker do not fill the cache.
+  In `Audit` mode they can fill it. That costs time, not safety: the texts of the app are normalized again.
+- A known text is still checked for each request. The cache only saves the work of normalizing.
 
 How to read these numbers:
 
-- The machine did other work during this run, so the requests per second are low. Read the relative change,
-  not the absolute numbers.
+- The machine did other work during this run, so the requests per second are low and the SQL rounds differ
+  much. Read the relative change, not the absolute numbers.
 - With a size limit, the response body passes through one more writer. With the caller check, each request
   makes one more lookup in the profile.
 - A local SQLite file answers in about 0.2 ms. That makes the relative cost of the guard as high as it gets.
   A database on the network is slower, so the same cost is a smaller share of the request.
-- In `Off` mode, and for code outside a request, the guard skips its work: the SQL is not normalized and
+- In `Off` mode, and for code outside a request and outside a scope, the guard skips its work: the SQL is not normalized and
   the outbound call is not inspected. Only the call into the EF Core interceptor and the HTTP handler remains.
 - The load client runs in the same process as the servers, and the machine speed changes during a run.
   The test compares each variant with the baseline run of the same round to reduce that effect.
