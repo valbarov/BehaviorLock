@@ -61,6 +61,17 @@ public sealed class BehaviorLockOptions
     public IList<string> CallerClaims { get; set; } = [];
 
     /// <summary>
+    /// Checks the requests of every <see cref="HttpClient"/> of the process, also of a client that a package
+    /// creates by itself, and each redirect hop. False means that only the clients of
+    /// <c>IHttpClientFactory</c> are checked, and only their first address.
+    /// <para>
+    /// The check needs an activity for each request. So a request without an activity around it, for example
+    /// in a background job, gets a <c>traceparent</c> header that it did not have before.
+    /// </para>
+    /// </summary>
+    public bool CheckAllHttpClients { get; set; } = true;
+
+    /// <summary>
     /// Records and checks the limits of each endpoint: the rows that a SQL statement returns and the size
     /// of the response body. False means that limits are not recorded and not checked.
     /// </summary>

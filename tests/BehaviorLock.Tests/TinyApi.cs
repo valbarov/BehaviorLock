@@ -10,6 +10,7 @@ namespace BehaviorLock.Tests;
 
 /// <summary>
 /// A tiny API on a test server for the checks of the middleware: the caller and the size of the response.
+/// It also has endpoints that call another server with a real HTTP handler; see <see cref="TargetServer"/>.
 /// It needs no database. The profile file is in a temporary directory.
 /// <para>
 /// The header <c>X-User</c> signs the caller in. The header <c>X-Roles</c> gives the roles of that caller,
@@ -39,6 +40,8 @@ public sealed class TinyApi : IAsyncDisposable
 
     public EndpointProfile Profile => _app.Services.GetRequiredService<EndpointProfile>();
 
+    public IServiceProvider Services => _app.Services;
+
     /// <summary>How often the endpoint <c>/whoami</c> ran.</summary>
     public int Calls { get; private set; }
 
@@ -60,6 +63,7 @@ public sealed class TinyApi : IAsyncDisposable
             configure?.Invoke(options);
         });
         builder.Services.AddSingleton<IViolationSink>(violations);
+        builder.Services.AddHttpClient();
 
         var app = builder.Build();
         var api = new TinyApi(directory, app, violations);
@@ -118,6 +122,31 @@ public sealed class TinyApi : IAsyncDisposable
             response.BodyWriter.GetSpan(size)[..size].Fill((byte)'x');
             response.BodyWriter.Advance(size);
         });
+
+        // Stands for a package that creates its own client. IHttpClientFactory does not know this client.
+        app.MapGet("/fetch", async (string url) =>
+        {
+            using var client = new HttpClient();
+            return await client.GetStringAsync(url);
+        });
+
+        // The same, but the package catches every error of its call.
+        app.MapGet("/fetch-quiet", async (string url) =>
+        {
+            try
+            {
+                using var client = new HttpClient();
+                return await client.GetStringAsync(url);
+            }
+            catch (Exception)
+            {
+                return "no answer";
+            }
+        });
+
+        // A client of the factory, with the real handler of .NET below the handler of the guard.
+        app.MapGet("/fetch-factory", async (string url, IHttpClientFactory factory) =>
+            await factory.CreateClient().GetStringAsync(url));
 
         await app.StartAsync();
         api.Client = app.GetTestClient();

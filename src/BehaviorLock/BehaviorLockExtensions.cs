@@ -8,7 +8,10 @@ namespace BehaviorLock;
 
 public static class BehaviorLockExtensions
 {
-    /// <summary>Registers the guard. Outbound calls of all <c>IHttpClientFactory</c> clients are covered.</summary>
+    /// <summary>
+    /// Registers the guard. Outbound calls of every <c>HttpClient</c> are covered; see
+    /// <see cref="BehaviorLockOptions.CheckAllHttpClients"/>.
+    /// </summary>
     public static IServiceCollection AddBehaviorLock(
         this IServiceCollection services, Action<BehaviorLockOptions>? configure = null)
     {
@@ -35,6 +38,7 @@ public static class BehaviorLockExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IViolationSink, LoggingViolationSink>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHttpMessageHandlerBuilderFilter, GuardHttpHandlerFilter>());
         services.AddHostedService<ProfileLifecycle>();
+        services.AddHostedService<GuardHttpDiagnostics>();
 
         // One instance collects the pending accesses as a sink and writes them as a hosted service.
         services.TryAddSingleton<PendingAccesses>();
