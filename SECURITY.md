@@ -20,7 +20,7 @@ Please include:
 
 ## What to expect
 
-One person maintains this project. You get a first answer within 7 days.
+One person maintains this project. You get a first answer within 45 days.
 
 When the report is confirmed, a fix is prepared in private and released as a new version. The advisory is
 published with the release, and it names you if you want that. Please keep the details private until then.
