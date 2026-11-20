@@ -19,11 +19,12 @@ public sealed class KnownLimitTests(ProfileFixture fixture)
     }
 
     [Fact]
-    public async Task Injection_that_keeps_the_shape_is_not_detected()
+    public async Task Injection_that_keeps_the_shape_is_not_detected_while_the_result_is_small()
     {
         await using var api = fixture.Create(GuardMode.Enforce);
 
-        // A LIKE wildcard changes the result, but not the statement shape.
+        // A LIKE wildcard changes the result, but not the statement shape. Only the row limit can see it,
+        // and the shop has too few products to pass that limit. See Attacks.WildcardDump for a larger shop.
         var body = await api.CreateClient().GetStringAsync("/products/search?name=" + Uri.EscapeDataString("%"));
 
         Assert.Contains("Laptop", body);

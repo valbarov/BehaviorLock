@@ -64,12 +64,17 @@ public sealed class ApiHost : IAsyncDisposable
         builder.Services.AddHttpClient<PaymentClient>();
         builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => new InstantHandler()));
 
+        builder.Services.AddShopAuthentication();
+
         var app = builder.Build();
 
         using (var scope = app.Services.CreateScope())
         {
             scope.ServiceProvider.GetRequiredService<ShopDb>().Database.EnsureCreated();
         }
+
+        app.UseAuthentication();
+        app.UseAuthorization();
 
         if (guarded)
         {

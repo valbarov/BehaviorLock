@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using SampleApi;
 
 namespace BehaviorLock.Tests;
 
@@ -29,5 +30,16 @@ public static class LegalRequests
             ["place order"] = client => client.PostAsJsonAsync("/orders", new { userId = 1, total = 120 }),
 
             ["preview webhook"] = client => client.GetAsync("/preview?url=https://hooks.example.com/ping"),
+
+            // The caller is part of the profile: only an admin calls this endpoint.
+            ["admin lists orders"] = client => GetAs(client, ApiKeyAuthentication.AdminKey, "/admin/orders"),
         };
+
+    /// <summary>Sends a GET request as the caller that owns this API key.</summary>
+    public static Task<HttpResponseMessage> GetAs(HttpClient client, string apiKey, string url)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add(ApiKeyAuthentication.Header, apiKey);
+        return client.SendAsync(request);
+    }
 }

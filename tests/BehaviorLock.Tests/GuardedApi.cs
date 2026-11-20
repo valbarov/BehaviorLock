@@ -35,6 +35,9 @@ public sealed class GuardedApi : WebApplicationFactory<Program>
     /// <summary>The file with reviewed accesses. Null means no approved file.</summary>
     public string? ApprovedPath { get; init; }
 
+    /// <summary>Changes more options of the guard. Null means that the defaults are used.</summary>
+    public Action<BehaviorLockOptions>? Configure { get; init; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:Shop", _connectionString);
@@ -46,6 +49,7 @@ public sealed class GuardedApi : WebApplicationFactory<Program>
                 options.ProfilePath = _profilePath;
                 options.PendingPath = PendingPath;
                 options.ApprovedPath = ApprovedPath;
+                Configure?.Invoke(options);
             });
             services.AddSingleton<IViolationSink>(Violations);
             services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => Outbound));

@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using SampleApi;
 
 namespace BehaviorLock.Tests;
 
@@ -18,6 +19,8 @@ public static class Attacks
     public const string SsrfMetadata = "ssrf: cloud metadata address";
     public const string SsrfOtherPort = "ssrf: other port on a legal host";
     public const string Exfiltration = "compromised dependency: copies an order to a foreign host";
+    public const string WildcardDump = "sql injection that keeps the shape: a wildcard returns every product";
+    public const string UserAsAdmin = "broken authorization: a normal user calls an admin endpoint";
 
     public const string MetadataUrl = "http://169.254.169.254/latest/meta-data/";
     public const string ExfiltrationUrl = "https://stats.evil.example/collect";
@@ -49,6 +52,22 @@ public static class Attacks
 
         [Exfiltration] = new("POST /orders", client =>
             client.PostAsJsonAsync("/orders", new { userId = 1, total = 5000 })),
+
+        [WildcardDump] = new("GET /products/search", async client =>
+        {
+            // The statement has the legal shape. Only the number of rows shows the attack,
+            // so the shop needs more products than a legal search returns.
+            for (var i = 1; i <= 10; i++)
+            {
+                using var created = await client.PostAsJsonAsync("/products", new { name = $"Cable {i}", price = 5 });
+                created.EnsureSuccessStatusCode();
+            }
+
+            return await client.GetAsync("/products/search?name=" + Escape("%"));
+        }),
+
+        [UserAsAdmin] = new("GET /admin/orders", client =>
+            LegalRequests.GetAs(client, ApiKeyAuthentication.UserKey, "/admin/orders")),
     };
 
     /// <summary>

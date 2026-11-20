@@ -16,6 +16,9 @@ public sealed class PendingAccessTests(ProfileFixture fixture) : IDisposable
     private const string UncoveredRequest = "/orders/1?debug=true";
     private const string UncoveredEndpoint = "GET /orders/{id:int}";
 
+    // The answer with the users is larger than the answer that the profile allows for one order.
+    private const string LargerResponse = "response: up to 1000 bytes";
+
     private readonly string _directory = Directory.CreateTempSubdirectory("behaviorlock-").FullName;
 
     private string PendingPath => Path.Combine(_directory, "behavior.lock.pending.json");
@@ -31,9 +34,14 @@ public sealed class PendingAccessTests(ProfileFixture fixture) : IDisposable
     {
         Assert.Equal(expected, await Send(mode, UncoveredRequest));
 
-        var access = Assert.Single(ReadFile(PendingPath)[UncoveredEndpoint]);
-        Assert.StartsWith("sql: SELECT", access);
+        var accesses = ReadFile(PendingPath)[UncoveredEndpoint];
+        var access = Assert.Single(accesses, entry => entry.StartsWith("sql: SELECT"));
         Assert.Contains("FROM \"Users\"", access);
+
+        // Audit mode lets the request finish, so it also sees that the answer is larger than a legal one.
+        // Enforce mode stops the request at the SQL statement.
+        string[] expectedLimits = mode == GuardMode.Audit ? [LargerResponse] : [];
+        Assert.Equal(expectedLimits, accesses.Where(entry => entry != access));
     }
 
     [Fact]
@@ -41,7 +49,9 @@ public sealed class PendingAccessTests(ProfileFixture fixture) : IDisposable
     {
         await Send(GuardMode.Audit, UncoveredRequest, UncoveredRequest, "/orders/2?debug=true");
 
-        Assert.Single(Assert.Single(ReadFile(PendingPath)).Value);
+        var accesses = Assert.Single(ReadFile(PendingPath)).Value;
+        Assert.Equal(2, accesses.Length);
+        Assert.Contains(LargerResponse, accesses);
     }
 
     [Fact]
@@ -120,7 +130,7 @@ public sealed class PendingAccessTests(ProfileFixture fixture) : IDisposable
             using var response = await api.CreateClient().GetAsync("/health");
         }
 
-        Assert.Empty(ReadFile(recorded)["GET /health"]);
+        Assert.DoesNotContain(ReadFile(recorded)["GET /health"], entry => entry.StartsWith("sql:"));
     }
 
     [Fact]

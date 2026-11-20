@@ -10,5 +10,6 @@ public static class ShopApi
         app.MapAccountEndpoints();
         app.MapOrderEndpoints();
         app.MapWebhookEndpoints();
+        app.MapAdminEndpoints();
     }
 }

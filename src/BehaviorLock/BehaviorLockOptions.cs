@@ -44,4 +44,17 @@ public sealed class BehaviorLockOptions
     /// recording never changes it. A relative path is resolved like <see cref="ProfilePath"/>.
     /// </summary>
     public string? ApprovedPath { get; set; }
+
+    /// <summary>
+    /// Records and checks the kind of caller of each endpoint: anonymous, signed in, and the roles.
+    /// The check needs the user of the request, so the guard middleware must run after authentication
+    /// and authorization. False means that callers are not recorded and not checked.
+    /// </summary>
+    public bool CheckCallers { get; set; } = true;
+
+    /// <summary>
+    /// Records and checks the limits of each endpoint: the rows that a SQL statement returns and the size
+    /// of the response body. False means that limits are not recorded and not checked.
+    /// </summary>
+    public bool CheckLimits { get; set; } = true;
 }

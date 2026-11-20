@@ -85,6 +85,20 @@ public sealed class AttackImpactTests(ProfileFixture fixture)
         Assert.False(await Run(GuardMode.Enforce, attack, (api, _) => WasCalled(api)));
     }
 
+    [Fact]
+    public async Task Wildcard_returns_every_product_only_without_the_guard()
+    {
+        Assert.Contains("Cable 10", await Body(GuardMode.Off, Attacks.WildcardDump));
+        Assert.Empty(await Body(GuardMode.Enforce, Attacks.WildcardDump));
+    }
+
+    [Fact]
+    public async Task A_normal_user_reads_the_orders_of_all_users_only_without_the_guard()
+    {
+        Assert.Contains("\"userId\":2", await Body(GuardMode.Off, Attacks.UserAsAdmin));
+        Assert.Empty(await Body(GuardMode.Enforce, Attacks.UserAsAdmin));
+    }
+
     private Task<string> Body(GuardMode mode, string attack) =>
         Run(mode, attack, (_, response) => response.Content.ReadAsStringAsync());
 

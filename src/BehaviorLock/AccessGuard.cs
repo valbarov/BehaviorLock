@@ -14,6 +14,7 @@ public interface IAccessGuard
     /// <summary>
     /// Call this before a resource is touched.
     /// Throws <see cref="GuardViolationException"/> when the access must be blocked.
+    /// A limit is recorded and reported with its number rounded up; see <see cref="ResourceAccess.RoundedUp"/>.
     /// </summary>
     void Check(ResourceAccess access);
 }
@@ -38,7 +39,7 @@ public sealed class AccessGuard(
 
         if (mode == GuardMode.Learn)
         {
-            profile.Allow(context.Endpoint, access);
+            profile.Allow(context.Endpoint, access.RoundedUp());
             return;
         }
 
@@ -47,7 +48,13 @@ public sealed class AccessGuard(
             return;
         }
 
-        var violation = new GuardViolation(context.Endpoint, access, Blocked: mode == GuardMode.Enforce);
+        // A caller or a limit needs an entry to compare it with. Without one, there is nothing to check.
+        if (access.OnlyCheckedWhenRecorded && !profile.HasEntryLike(context.Endpoint, access))
+        {
+            return;
+        }
+
+        var violation = new GuardViolation(context.Endpoint, access.RoundedUp(), Blocked: mode == GuardMode.Enforce);
         foreach (var sink in sinks)
         {
             sink.Report(violation);

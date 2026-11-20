@@ -13,6 +13,8 @@ builder.Services.AddDbContext<ShopDb>((services, options) => options
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<PaymentClient>();
 
+builder.Services.AddShopAuthentication();
+
 var app = builder.Build();
 
 // Startup code runs outside a request, so the guard does not check it.
@@ -21,6 +23,9 @@ using (var scope = app.Services.CreateScope())
     scope.ServiceProvider.GetRequiredService<ShopDb>().Database.EnsureCreated();
 }
 
+// The guard checks the caller, so it must run after authentication and authorization.
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseBehaviorLock();
 
 app.MapShopApi();

@@ -4,7 +4,8 @@ Active security for ASP.NET Core APIs. BehaviorLock records what each endpoint d
 requests. In production it blocks every request that makes an endpoint do something else.
 
 It does not look for known attack patterns. It only knows the legal behavior, so it also stops attacks and
-bugs that nobody has seen before, as long as they change what the endpoint touches.
+bugs that nobody has seen before, as long as they change what the endpoint touches, who calls it, or how
+much it returns.
 
 > Status: MVP. It targets .NET 11 and covers EF Core and `IHttpClientFactory`. Read [Limits](#limits) before you use it.
 
@@ -16,7 +17,8 @@ bugs that nobody has seen before, as long as they change what the endpoint touch
 2. **Review.** You commit the profile. When an endpoint starts to touch something new, the profile diff shows it
    in the pull request.
 3. **Enforce.** In production the guard checks each access *before* it runs. An access that is not in the
-   profile never runs. The request gets a 403 and an alert is raised.
+   profile never runs. The request gets a 403 and an alert is raised. Only the row limit is checked after
+   the command has run; see [Limits](#limits).
 4. **Close the gaps.** Tests never cover every legal path. In production the guard writes each unknown access
    to a pending file. A person reviews it and accepts the legal ones.
    See [Find the gaps in production](#find-the-gaps-in-production).
@@ -30,6 +32,9 @@ An access is one of:
 |---|---|---|
 | `sql` | The statement shape: the SQL text with all literals and parameters replaced by `?` | `SELECT * FROM Products WHERE Name LIKE ?` |
 | `http` | Method, scheme, host and port of an outbound call | `GET https://hooks.example.com` |
+| `caller` | The kind of caller: anonymous, or signed in with a list of roles. See [Callers](#callers) | `signed in, role admin` |
+| `rows` | The largest number of rows that one command returns. See [Limits](#limits) | `up to 10 from SELECT * FROM Products WHERE Name LIKE ?` |
+| `response` | The largest size of the response body. See [Limits](#limits) | `up to 1000 bytes` |
 
 A profile looks like this (see the full one in [samples/SampleApi/behavior.lock.json](samples/SampleApi/behavior.lock.json)):
 
@@ -38,12 +43,17 @@ A profile looks like this (see the full one in [samples/SampleApi/behavior.lock.
   "$database": [
     "Microsoft.EntityFrameworkCore.Sqlite 11.0.0"
   ],
-  "GET /products/search": [
-    "sql: SELECT * FROM Products WHERE Name LIKE ?"
+  "GET /admin/orders": [
+    "caller: signed in, role admin",
+    "response: up to 100 bytes",
+    "rows: up to 10 from SELECT \"o\".\"Id\", \"o\".\"Total\", \"o\".\"UserId\" FROM \"Orders\" AS \"o\"",
+    "sql: SELECT \"o\".\"Id\", \"o\".\"Total\", \"o\".\"UserId\" FROM \"Orders\" AS \"o\""
   ],
-  "POST /orders": [
-    "http: POST https://payments.example.com",
-    "sql: INSERT INTO \"Orders\" (\"Total\", \"UserId\") VALUES (?) RETURNING \"Id\""
+  "GET /products/search": [
+    "caller: anonymous",
+    "response: up to 100 bytes",
+    "rows: up to 10 from SELECT * FROM Products WHERE Name LIKE ?",
+    "sql: SELECT * FROM Products WHERE Name LIKE ?"
   ]
 }
 ```
@@ -68,7 +78,9 @@ builder.Services.AddDbContext<ShopDb>((services, options) => options
 
 var app = builder.Build();
 
-// 3. Add the middleware after routing and before the endpoints.
+// 3. Add the middleware after routing, authentication and authorization, and before the endpoints.
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseBehaviorLock();
 ```
 
@@ -88,6 +100,8 @@ app.UseBehaviorLock();
 | `ApprovedPath` | Not set | The file with reviewed accesses. See [Find the gaps in production](#find-the-gaps-in-production) |
 | `PendingPath` | Not set | The file where the guard writes unknown accesses. Not set means that no file is written |
 | `PendingLimit` | `1000` | The largest number of accesses in the pending file |
+| `CheckCallers` | `true` | Records and checks the kind of caller. See [Callers](#callers) |
+| `CheckLimits` | `true` | Records and checks the rows and the response size. See [Limits](#limits) |
 
 A relative path is resolved against the content root of the app.
 
@@ -135,6 +149,81 @@ public sealed class AccountController : ControllerBase { /* ... */ }
 - The mode of an endpoint beats the mode of its route group. The mode of an action beats the mode of its controller.
 - An endpoint with the mode `Enforce` needs the profile, also when the global mode is `Audit`.
   See [Deploy the profile](#deploy-the-profile).
+
+## Callers
+
+The guard records which kind of caller uses each endpoint. In production it stops a caller of another kind
+before the endpoint runs.
+
+| Caller | Entry in the profile |
+|---|---|
+| Not signed in | `caller: anonymous` |
+| Signed in, without a role | `caller: signed in, no role` |
+| Signed in, with roles | `caller: signed in, role admin, role support` |
+
+This finds an endpoint that forgot its own check. In the sample, `GET /admin/orders` only asks for a
+signed-in caller. The tests call it as an admin, so the profile has `caller: signed in, role admin`.
+A normal user gets a 403 from the guard.
+
+- **The whole list of roles must match.** A recording with a caller that has the roles `admin` and `support`
+  does not allow a caller that has only `support`. Send one legal request for each legal kind of caller.
+- **The roles are the role claims of the signed-in user**, sorted by name.
+- **The guard does not replace authorization.** It runs after it, and it sees only the requests that the
+  app lets through.
+- **Add the middleware after `UseAuthentication` and `UseAuthorization`.** Before authentication, every
+  caller is anonymous. Before authorization, the guard answers 403 where the app answers 401.
+- **Record with the callers of production.** Tests that run without sign-in, or with one user for every
+  request, record callers that do not fit production. Run `Audit` mode with a pending file first, or set
+  `CheckCallers` to `false`.
+- An endpoint without a `caller:` entry is not checked for its caller. This is the case for a profile from
+  an older version.
+
+## Limits
+
+A request can keep the legal shape and still take far too much. A `%` in a search value returns the whole
+table with the same statement. The guard records two numbers for this, and it stops a request that passes them.
+
+| Limit | Entry in the profile | When it is checked |
+|---|---|---|
+| The rows that one command returns | `rows: up to 10 from SELECT * FROM Products WHERE Name LIKE ?` | When the reader of the command closes |
+| The size of the response body | `response: up to 1000 bytes` | At each write to the body |
+
+`Learn` mode rounds each number up to 0, 1, 10, 100, 1000 and so on, and it keeps the highest step that it
+saw. So a small change of the test data does not change the profile.
+
+**The limits come from your test data.** A test database is small, so the recorded limits are often lower
+than the legal numbers of production. Do this before you use `Enforce` mode:
+
+1. Run `Audit` mode with a pending file. See [Find the gaps in production](#find-the-gaps-in-production).
+2. The pending file gets one entry per limit, with the highest step that a request needed, for example
+   `rows: up to 1000 from SELECT * FROM Products WHERE Name LIKE ?`.
+3. Decide what is legal and copy the entry to the approved file. You can write any number, for example
+   `up to 5000`. Of two limits for the same thing, the higher one applies.
+
+What a blocked request looks like:
+
+- **Rows.** The guard knows the number only when the app has read the rows, so the command has already run.
+  The guard then throws, and the endpoint cannot use or send the rows. The response is 403 with an empty body.
+- **Response size.** The guard stops the first write that would pass the limit. When nothing was sent yet,
+  the response is 403 with an empty body. When a part was sent, the guard closes the connection. The client
+  never gets more bytes than the limit.
+
+Things to know:
+
+- **No entry means no limit.** An approved `sql:` line has no row limit until you add a `rows:` line. A
+  profile from an older version has no limits at all.
+- **The row count is the number of read calls.** It is one higher than the number of rows when the app reads
+  to the end. So a query for one row gets the entry `up to 10`.
+- **A command with several statements has one count.** It belongs to all its statements together.
+- **A row limit does not protect the database or the memory of the app.** A blocked command has run, and
+  its rows were in memory. A blocked `INSERT`, `UPDATE` or `DELETE` with `RETURNING` has changed the data,
+  unless the app uses a transaction.
+- **An error answer counts too.** A validation error can be larger than the legal answer of a small
+  endpoint. Record that path with a test, or approve its size.
+- **A streaming endpoint has no natural size.** Give it a high limit in the approved file, or its own mode.
+- In `Enforce` mode, a response with a size limit starts at its first write or flush. A call to
+  `Response.StartAsync` alone does not send the headers.
+- Set `CheckLimits` to `false` to turn both limits off.
 
 ## Deploy the profile
 
@@ -249,6 +338,10 @@ Things to know:
   comments. Never copy it to the approved file without a review.
 - The pending file holds at most `PendingLimit` accesses (default 1000), because each attack attempt can
   give a new access. Accesses over the limit are still reported, but not written.
+- A limit has one entry in the pending file, with the highest number that a request needed.
+  See [Limits](#limits).
+- `Enforce` mode stops a request at its first unknown access, so the pending file gets one entry per
+  request. `Audit` mode lets the request finish and writes all its unknown accesses.
 - Each instance of the app writes its own pending file. Give each instance its own path.
 - `Learn` mode ignores the approved file, so the recording never copies approved accesses into the profile.
 - A missing approved file gives a warning at startup. The app starts, and only the profile is used.
@@ -284,16 +377,24 @@ attack twice: with the guard off, to show the harm, and in `Enforce` mode, to sh
 | SSRF | `url=http://169.254.169.254/...` | The server calls an internal address | New outbound host |
 | SSRF | Other port on a legal host | The server calls an internal service | New outbound port |
 | Compromised dependency | An order with a high total | The order is copied to a foreign host | New outbound host |
+| SQL injection that keeps the shape | `%` in a `LIKE` value, in a shop with many products | Every product is returned | More rows than a legal search |
+| Missing role check | A normal user calls `GET /admin/orders` | The orders of all users leak | New kind of caller |
 
 Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/KnownLimitTests.cs) keeps them visible:
 
-- **IDOR.** Reading the order of another user has the same SQL shape as a legal read.
-- **Injection that keeps the shape.** A `%` wildcard in a `LIKE` value changes the result, but not the statement.
+- **IDOR.** Reading the order of another user has the same SQL shape and the same kind of caller as a
+  legal read.
+- **Injection that keeps the shape and stays under the limits.** A `%` wildcard in a `LIKE` value changes
+  the result, but not the statement. The guard sees it only when it returns more rows than the limit.
 
 ## Limits
 
-- **Attacks inside the profile pass.** Broken authorization, business logic errors, XSS and DoS do not change
-  what an endpoint touches.
+- **Attacks inside the profile pass.** Business logic errors, XSS and most DoS attacks do not change what an
+  endpoint touches. Broken authorization passes when the attacker is a legal kind of caller, for example
+  one user who reads the data of another user.
+- **Callers and limits are only as good as the recording.** They come from the users and the data of your
+  tests. See [Callers](#callers) and [Limits](#limits).
+- **A row limit works after the command has run.** See [Limits](#limits).
 - **Only EF Core and `IHttpClientFactory` are covered.** Dapper, raw ADO.NET, a directly created `HttpClient`,
   file access and process start are not checked.
 - **HTTP redirects are not checked.** A legal host that redirects to another host passes.
@@ -328,7 +429,7 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 | `IViolationSink` | Receives violations | `LoggingViolationSink` |
 | `IProfileStore` | Loads and saves the recorded profile with its `Databases`, and names its location | `JsonFileProfileStore` |
 | `ISqlNormalizer` | Reduces SQL to its shape, with the rules of a `SqlDialect` | `SqlNormalizer` |
-| `IAccessGuard` | Checks one access. Call it from your own code to guard other resources | `AccessGuard` |
+| `IAccessGuard` | Checks one access. Call it from your own code to guard other resources. An access with `UpTo` is a limit | `AccessGuard` |
 | `IGuardModeMetadata` | Endpoint metadata that sets the mode of one endpoint | `BehaviorLockAttribute` |
 
 ## Repository layout
@@ -336,7 +437,7 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 ```
 src/BehaviorLock            The library
 samples/SampleApi            Shop API with deliberate weaknesses, plus its recorded profile
-tests/BehaviorLock.Tests    Unit tests, legal requests, attacks, pending and approved files, mode per endpoint
+tests/BehaviorLock.Tests    Unit tests, legal requests, attacks, pending and approved files, mode per endpoint, callers, limits
 perf/BehaviorLock.LoadTest   Load test that compares the API with and without the guard
 ```
 
@@ -386,27 +487,30 @@ dotnet run -c Release --project perf/BehaviorLock.LoadTest -- --filter preview -
 ```
 
 Results from one machine (16 logical cores, Windows 11, .NET 11, local SQLite file, 16 connections,
-8 rounds of 4 s). Throughput in `Enforce` mode, compared with the same API without the package:
+8 rounds of 4 s), with the caller check and the limits on. Throughput in `Enforce` mode, compared with the
+same API without the package:
 
 | Scenario | Requests/s without the package | Change in `Enforce` mode |
 |---|---:|---|
-| No resource access | 215,000 | No difference found |
-| One EF Core query | 53,000 | About 2% to 3% lower |
-| One raw SQL query | 56,000 | Between 0% and 2% lower |
-| EF Core query + `UPDATE`, one connection | 1,200 | No clear difference (noise is ±4%) |
-| One outbound HTTP call | 213,000 | About 1% lower |
-| SQL injection, blocked with a 403 | 54,000 | About 2% higher: blocking costs less than running the attack query |
+| No resource access | 99,000 | About 2% lower, but no clear difference (the rounds go from -7% to +23%) |
+| One EF Core query | 23,700 | About 3% lower |
+| One raw SQL query | 24,100 | Between 0% and 2% lower |
+| EF Core query + `UPDATE`, one connection | 470 | About 4% lower |
+| One outbound HTTP call | 96,000 | About 4% lower |
+| SQL injection, blocked with a 403 | 24,200 | About 4% lower |
 
-The latency percentiles (p50, p95, p99) differ by 0.04 ms or less in every scenario.
+The latency percentiles (p50, p95, p99) differ by 0.2 ms or less in every scenario.
 
-The guard's own work per SQL command is small: 0.1 to 0.5 µs to normalize the statement and 0.1 µs to check
-it, with about 770 bytes allocated.
+The guard's own work per SQL command is small: 0.3 to 0.5 µs to normalize the statement and 0.1 µs to check
+it, with about 770 bytes allocated. A command with a reader is normalized two times: before it runs, and
+when its reader closes.
 
 How to read these numbers:
 
-- They were measured before the pending file and the mode per endpoint were added. Both add a small
-  amount of work per request, and the load test was not run again after that.
-
+- The machine did other work during this run, so the requests per second are low. Read the relative change,
+  not the absolute numbers.
+- With a size limit, the response body passes through one more writer. With the caller check, each request
+  makes one more lookup in the profile.
 - A local SQLite file answers in about 0.2 ms. That makes the relative cost of the guard as high as it gets.
   A database on the network is slower, so the same cost is a smaller share of the request.
 - In `Off` mode, and for code outside a request, the guard skips its work: the SQL is not normalized and
