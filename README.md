@@ -598,6 +598,9 @@ The tests drop and create a table with the name `Users`, so use them only with a
 
 ### Release
 
+Before a release, move the entries under "Unreleased" in [CHANGELOG.md](CHANGELOG.md) to a section for the
+new version.
+
 A version tag publishes the package to nuget.org and creates a GitHub release. The tag gives the version:
 
 ```
@@ -671,6 +674,15 @@ How to read these numbers:
 - The load client runs in the same process as the servers, and the machine speed changes during a run.
   The test compares each variant with the baseline run of the same round to reduce that effect.
   Differences below about 1% are not reliable.
+
+## Security
+
+Found a way to get past the guard? Report it in private, not as a public issue.
+[SECURITY.md](SECURITY.md) says how, and what counts as a vulnerability.
+
+## Changes
+
+[CHANGELOG.md](CHANGELOG.md) lists the changes of each version.
 
 ## License
 
