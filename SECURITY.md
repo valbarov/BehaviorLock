@@ -47,9 +47,9 @@ A vulnerability is a way to make the guard allow or miss something that it claim
 
 ## What is not a vulnerability
 
-- **The known limits.** The README lists what the guard does not cover, for example IDOR, an injection that
-  keeps the shape and stays under the limits, and code outside a request. See
-  [Known limits](README.md#known-limits). Ideas to close one of these limits are welcome as a normal issue.
+- **The known limits.** The documentation lists what the guard does not cover, for example IDOR, an injection
+  that keeps the shape and stays under the limits, and code outside a request. See
+  [Known limits](docs/known-limits.md). Ideas to close one of these limits are welcome as a normal issue.
 - **The sample API.** [samples/SampleApi](samples/SampleApi) has weaknesses on purpose: SQL injection, mass
   assignment, SSRF and a missing role check. The tests use them to show what the guard stops.
 - **A profile or an approved file that allows too much.** The guard allows what these files say.
