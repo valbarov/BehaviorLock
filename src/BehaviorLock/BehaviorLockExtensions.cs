@@ -74,6 +74,10 @@ public static class BehaviorLockExtensions
         services.TryAddSingleton<DatabaseCheck>();
         services.TryAddSingleton<GuardDbCommandInterceptor>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IViolationSink, LoggingViolationSink>());
+
+        // The counter needs the meter factory. A web app has it already, and a second call changes nothing.
+        services.AddMetrics();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IViolationSink, ViolationMetrics>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHttpMessageHandlerBuilderFilter, GuardHttpHandlerFilter>());
         services.AddHostedService<ProfileLifecycle>();
         services.AddHostedService<GuardHttpDiagnostics>();
