@@ -13,6 +13,8 @@ namespace BehaviorLock.Tests;
 /// </summary>
 public sealed class ModeTestApi : IAsyncDisposable
 {
+    public const string RequestIdHeader = "X-Request-Id";
+
     public static readonly ResourceAccess Unknown = ResourceAccess.Sql("SELECT * FROM Users");
 
     // Enforce mode does not start with an empty profile, so the profile has one endpoint that no test calls.
@@ -72,7 +74,26 @@ public sealed class ModeTestApi : IAsyncDisposable
         services?.Invoke(builder.Services);
 
         var app = builder.Build();
+
+        // Stands for an app that takes the id of a request from a header of its gateway.
+        app.Use(async (http, next) =>
+        {
+            if (http.Request.Headers.TryGetValue(RequestIdHeader, out var id))
+            {
+                http.TraceIdentifier = id.ToString();
+            }
+
+            await next(http);
+        });
+
         app.UseBehaviorLock();
+
+        // Two accesses in one request.
+        app.MapGet("/twice", (IAccessGuard guard) =>
+        {
+            guard.Check(Unknown);
+            guard.Check(ResourceAccess.Sql("SELECT * FROM Orders"));
+        });
 
         app.MapGet("/default", Touch);
         app.MapGet("/off", Touch).WithBehaviorLock(GuardMode.Off);

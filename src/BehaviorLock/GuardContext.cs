@@ -18,6 +18,9 @@ internal sealed class GuardContext(string endpoint, GuardMode? mode)
     /// </summary>
     public GuardMode? Mode { get; } = mode;
 
+    /// <summary>The id of the request, for the violations of this context. Null in a guard scope.</summary>
+    public string? RequestId { get; init; }
+
     /// <summary>Set when an access of this request was blocked.</summary>
     public GuardViolation? Violation { get; set; }
 }

@@ -157,7 +157,15 @@ public sealed record ResourceAccess(string Kind, string Key)
 }
 
 /// <summary>An access that is not in the profile of its endpoint.</summary>
-public sealed record GuardViolation(string Endpoint, ResourceAccess Access, bool Blocked);
+public sealed record GuardViolation(string Endpoint, ResourceAccess Access, bool Blocked)
+{
+    /// <summary>
+    /// The id of the request that made the access: <c>HttpContext.TraceIdentifier</c>. ASP.NET Core adds
+    /// the same id as <c>RequestId</c> to the log scope of the request, so the two can be found together.
+    /// Null for an access in a guard scope, which has no request.
+    /// </summary>
+    public string? RequestId { get; init; }
+}
 
 /// <summary>
 /// Thrown in the code that made an access which the guard blocked. The middleware turns it into a 403.
