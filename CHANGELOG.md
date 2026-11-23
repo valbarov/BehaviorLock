@@ -22,6 +22,8 @@ profile file. Each such change is listed under **Changed** or **Removed**.
   `HttpContext.TraceIdentifier`. So the reason for a 403 can be found from the request.
 - **Placeholders in `PendingPath`.** `{machine}` and `{pid}` give each instance of the app its own pending
   file in a shared directory.
+- **Endpoints without a profile in the log.** When the app starts in `Audit` or `Enforce` mode, a warning names
+  the endpoints that the profile does not have. Endpoints with the mode `Off` are left out.
 - `AddBehaviorLock(configuration)` binds the options to a configuration section and follows its reloads.
   The quick start uses it now.
 

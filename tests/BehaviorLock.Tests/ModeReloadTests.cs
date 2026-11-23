@@ -81,7 +81,7 @@ public sealed class ModeReloadTests
 
         api.ChangeMode(GuardMode.Off);
 
-        Assert.Equal(["BehaviorLock mode changed from Enforce to Off"], api.Logs.Warnings);
+        Assert.Contains("BehaviorLock mode changed from Enforce to Off", api.Logs.Warnings);
         Assert.Empty(api.Logs.Errors);
     }
 

@@ -27,8 +27,8 @@ public sealed class RequestIdTests
 
         await Send(api, "/default", HttpStatusCode.Forbidden, requestId: "gateway-4711");
 
-        Assert.Equal(
-            ["BehaviorLock violation (blocked): endpoint 'GET /default' attempted 'sql: SELECT * FROM Users' in request gateway-4711"],
+        Assert.Contains(
+            "BehaviorLock violation (blocked): endpoint 'GET /default' attempted 'sql: SELECT * FROM Users' in request gateway-4711",
             api.Logs.Warnings);
     }
 

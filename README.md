@@ -443,6 +443,14 @@ The profile comes from your integration tests, not from manual use. The test pro
 - The same requests must then pass in `Enforce` mode.
 - `EndpointCoverage.FindUnprofiled` returns the endpoints that have no profile, so a test can fail the build.
 
+The guard also names these endpoints in a log warning when the app starts in `Audit` or `Enforce` mode. So you
+see the gap before the first 403. An endpoint with the mode `Off` is left out there, because the guard never
+checks it.
+
+```
+BehaviorLock: the profile at /app/behavior.lock.json does not have 2 of the endpoints of the app: GET /reports, POST /orders/{id}/refund. Enforce mode blocks every SQL command and every outbound call of such an endpoint. Add a legal request for each of them to the recording
+```
+
 One request per endpoint is not enough. Each legal path that touches different resources needs its own
 request. For example, `GET /products?sort=Price` and `GET /products?sort=Name` give two SQL shapes.
 
