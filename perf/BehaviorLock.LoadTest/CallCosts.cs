@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Options;
 
 namespace BehaviorLock.LoadTest;
 
@@ -23,8 +22,7 @@ public static class CallCosts
         var profile = new EndpointProfile();
         profile.Allow("GET /products/{id:int}", access);
         var accessor = new GuardContextAccessor { Current = new GuardContext("GET /products/{id:int}") };
-        var guard = new AccessGuard(
-            accessor, profile, [], new GlobalMode(GuardMode.Enforce), Options.Create(new BehaviorLockOptions()));
+        var guard = new AccessGuard(accessor, profile, [], new LiveSettings(GuardMode.Enforce));
 
         Console.WriteLine("## Cost per call (one thread, no HTTP, no database)");
         Console.WriteLine();

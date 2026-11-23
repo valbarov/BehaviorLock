@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Options;
-
 namespace BehaviorLock.Tests;
 
 public sealed class AccessGuardTests
@@ -87,5 +85,5 @@ public sealed class AccessGuardTests
     }
 
     private AccessGuard Guard(GuardMode mode) =>
-        new(_accessor, _profile, [_sink], new GlobalMode(mode), Options.Create(new BehaviorLockOptions()));
+        new(_accessor, _profile, [_sink], new LiveSettings(mode));
 }

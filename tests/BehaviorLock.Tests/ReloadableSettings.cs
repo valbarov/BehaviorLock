@@ -5,23 +5,36 @@ using Microsoft.Extensions.Logging;
 namespace BehaviorLock.Tests;
 
 /// <summary>
-/// Keeps the global mode in the configuration of a test API, so that a test can change it while the API
-/// runs. An app gets the same when it edits appsettings.json.
+/// Keeps the global mode in the configuration of a test API, so that a test can change it and
+/// <c>EnforceLimits</c> while the API runs. An app gets the same when it edits appsettings.json.
 /// </summary>
-internal static class ModeSetting
+internal static class ReloadableSettings
 {
     public const string Section = "BehaviorLock";
 
-    private const string Key = $"{Section}:Mode";
+    private const string ModeKey = $"{Section}:Mode";
+    private const string EnforceLimitsKey = $"{Section}:EnforceLimits";
 
     /// <summary>Adds a source that keeps its values over a reload.</summary>
     public static void Add(IConfigurationBuilder configuration, GuardMode mode) =>
-        configuration.AddInMemoryCollection(new Dictionary<string, string?> { [Key] = mode.ToString() });
+        configuration.AddInMemoryCollection(new Dictionary<string, string?> { [ModeKey] = mode.ToString() });
 
-    /// <summary>Sets the mode and tells the listeners, on this thread, that the configuration has changed.</summary>
-    public static void Change(IConfiguration configuration, GuardMode mode)
+    /// <summary>
+    /// Sets the given values and tells the listeners, on this thread, that the configuration has changed.
+    /// Null keeps a value as it is.
+    /// </summary>
+    public static void Change(IConfiguration configuration, GuardMode? mode = null, bool? enforceLimits = null)
     {
-        configuration[Key] = mode.ToString();
+        if (mode is { } newMode)
+        {
+            configuration[ModeKey] = newMode.ToString();
+        }
+
+        if (enforceLimits is { } newValue)
+        {
+            configuration[EnforceLimitsKey] = newValue.ToString();
+        }
+
         ((IConfigurationRoot)configuration).Reload();
     }
 }

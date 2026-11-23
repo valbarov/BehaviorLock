@@ -16,8 +16,9 @@ public static class BehaviorLockExtensions
     /// <c>builder.Configuration.GetSection("BehaviorLock")</c>. Outbound calls of every <c>HttpClient</c>
     /// are covered; see <see cref="BehaviorLockOptions.CheckAllHttpClients"/>.
     /// <para>
-    /// The guard follows a change of <see cref="BehaviorLockOptions.Mode"/> in this configuration while
-    /// the app runs. Every other option is read once, when the app starts.
+    /// The guard follows a change of <see cref="BehaviorLockOptions.Mode"/> and of
+    /// <see cref="BehaviorLockOptions.EnforceLimits"/> in this configuration while the app runs.
+    /// Every other option is read once, when the app starts.
     /// </para>
     /// </summary>
     /// <param name="services">The services of the app.</param>
@@ -38,7 +39,7 @@ public static class BehaviorLockExtensions
     /// <see cref="BehaviorLockOptions.CheckAllHttpClients"/>.
     /// <para>
     /// The options that this overload sets are fixed while the app runs. Use the overload with a
-    /// configuration to change the mode of a running app.
+    /// configuration to change the mode or <see cref="BehaviorLockOptions.EnforceLimits"/> of a running app.
     /// </para>
     /// </summary>
     public static IServiceCollection AddBehaviorLock(
@@ -51,7 +52,10 @@ public static class BehaviorLockExtensions
         }
 
         services.TryAddSingleton(provider =>
-            new GlobalMode(provider.GetRequiredService<IOptions<BehaviorLockOptions>>().Value.Mode));
+        {
+            var start = provider.GetRequiredService<IOptions<BehaviorLockOptions>>().Value;
+            return new LiveSettings(start.Mode, start.EnforceLimits);
+        });
         services.TryAddSingleton<IGuardContextAccessor, GuardContextAccessor>();
         services.TryAddSingleton<IProfileStore, JsonFileProfileStore>();
         services.TryAddSingleton<ApprovedAccesses>();
@@ -66,7 +70,7 @@ public static class BehaviorLockExtensions
         services.TryAddSingleton(provider => new GuardScopes(
             provider.GetRequiredService<IGuardContextAccessor>(),
             provider.GetRequiredService<EndpointProfile>(),
-            provider.GetRequiredService<GlobalMode>()));
+            provider.GetRequiredService<LiveSettings>()));
         services.TryAddSingleton<DatabaseCheck>();
         services.TryAddSingleton<GuardDbCommandInterceptor>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IViolationSink, LoggingViolationSink>());

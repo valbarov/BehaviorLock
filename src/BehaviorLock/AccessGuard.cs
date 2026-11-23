@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Options;
-
 namespace BehaviorLock;
 
 /// <summary>
@@ -28,8 +26,7 @@ internal sealed class AccessGuard(
     IGuardContextAccessor contextAccessor,
     EndpointProfile profile,
     IEnumerable<IViolationSink> sinks,
-    GlobalMode globalMode,
-    IOptions<BehaviorLockOptions> options) : IAccessGuard
+    LiveSettings settings) : IAccessGuard
 {
     public bool IsActive => ModeOf(contextAccessor.Current) != GuardMode.Off;
 
@@ -61,7 +58,7 @@ internal sealed class AccessGuard(
         }
 
         // A limit can be report-only: see BehaviorLockOptions.EnforceLimits.
-        var blocked = mode == GuardMode.Enforce && (access.UpTo is null || options.Value.EnforceLimits);
+        var blocked = mode == GuardMode.Enforce && (access.UpTo is null || settings.EnforceLimits);
         var violation = new GuardViolation(context.Endpoint, access.RoundedUp(), blocked);
         foreach (var sink in sinks)
         {
@@ -79,5 +76,5 @@ internal sealed class AccessGuard(
     // The context has the own mode of the endpoint or scope. The global mode is read for each access,
     // so a change of it also reaches a request or a scope that is already running.
     private GuardMode ModeOf(GuardContext? context) =>
-        context is null ? GuardMode.Off : GuardModes.Effective(globalMode.Current, context.Mode);
+        context is null ? GuardMode.Off : GuardModes.Effective(settings.Mode, context.Mode);
 }

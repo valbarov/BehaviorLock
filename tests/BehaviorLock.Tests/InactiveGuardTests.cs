@@ -1,5 +1,4 @@
 using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Options;
 
 namespace BehaviorLock.Tests;
 
@@ -52,7 +51,7 @@ public sealed class InactiveGuardTests
     }
 
     private AccessGuard Guard(GuardMode mode) =>
-        new(_accessor, new EndpointProfile(), [], new GlobalMode(mode), Options.Create(new BehaviorLockOptions()));
+        new(_accessor, new EndpointProfile(), [], new LiveSettings(mode));
 
     private sealed class CountingNormalizer : ISqlNormalizer
     {

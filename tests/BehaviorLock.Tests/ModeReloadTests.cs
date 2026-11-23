@@ -121,7 +121,7 @@ public sealed class ModeReloadTests
         api.ChangeMode(GuardMode.Audit);
         api.ChangeMode(GuardMode.Enforce);
 
-        Assert.Equal(GuardMode.Audit, api.Services.GetRequiredService<GlobalMode>().Current);
+        Assert.Equal(GuardMode.Audit, api.Services.GetRequiredService<LiveSettings>().Mode);
     }
 
     [Fact]
@@ -245,7 +245,7 @@ public sealed class ModeReloadTests
     {
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            ModeSetting.Change(configuration, GuardMode.Enforce);
+            ReloadableSettings.Change(configuration, GuardMode.Enforce);
             return Task.CompletedTask;
         }
 

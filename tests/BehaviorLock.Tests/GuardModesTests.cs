@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Options;
 
 namespace BehaviorLock.Tests;
 
@@ -116,7 +115,7 @@ public sealed class GuardModesTests
     }
 
     private AccessGuard Guard(GuardMode global) =>
-        new(_accessor, new EndpointProfile(), [_sink], new GlobalMode(global), Options.Create(new BehaviorLockOptions()));
+        new(_accessor, new EndpointProfile(), [_sink], new LiveSettings(global));
 
     private sealed class RecordingConventionBuilder : IEndpointConventionBuilder
     {

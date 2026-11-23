@@ -114,7 +114,7 @@ app.UseBehaviorLock();
 | `CallerClaims` | Empty | More claim types that are part of the kind of caller, for example `scope`. See [Callers](#callers) |
 | `CheckAllHttpClients` | `true` | Checks every `HttpClient` and each redirect hop. `false` checks only the clients of `IHttpClientFactory`. See [Outbound calls](#outbound-calls) |
 | `CheckLimits` | `true` | Records and checks the rows and the response size. See [Limits](#limits) |
-| `EnforceLimits` | `true` | `false` means that a number over a limit is reported, but never blocked. See [Limits](#limits) |
+| `EnforceLimits` | `true` | `false` means that a number over a limit is reported, but never blocked. It can change while the app runs. See [Limits](#limits) |
 | `SqlShapeCacheSize` | `1000` | The number of SQL command texts whose shapes the guard keeps. `0` turns the cache off. See [Performance](#performance) |
 
 A relative path is resolved against the content root of the app.
@@ -157,7 +157,8 @@ change `Mode` in the configuration of the running app, for example in `appsettin
   endpoint. See [Mode per endpoint](#mode-per-endpoint).
 - Each change is logged as a warning, for example `BehaviorLock mode changed from Enforce to Audit`. Look for
   this line after you change the file. A value that is not a mode changes nothing and gives no such line.
-- Every other option is read once, at the start.
+- `EnforceLimits` follows a reload in the same way. See [Limits](#limits). Every other option is read once,
+  at the start.
 
 Who can write the configuration can turn the guard off. Protect it like the files of the app.
 
@@ -297,6 +298,11 @@ file gets no more limits.
   "PendingPath": "/var/lib/shop/behavior.lock.pending.json"
 }
 ```
+
+You can change `EnforceLimits` while the app runs, like the mode. So when a limit blocks legal requests, you
+can stop that without a new deploy, and the guard still blocks everything else. Each change is logged as a
+warning, for example `BehaviorLock EnforceLimits changed from True to False`.
+See [Change the mode while the app runs](#change-the-mode-while-the-app-runs).
 
 What a blocked request looks like:
 

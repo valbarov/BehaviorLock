@@ -24,7 +24,8 @@ public sealed class BehaviorLockOptions
     /// its own mode; see <see cref="BehaviorLockAttribute"/>.
     /// <para>
     /// A change of this value in the configuration applies while the app runs, between Off, Audit and
-    /// Enforce. Every other option is read once, when the app starts.
+    /// Enforce. Only this option and <see cref="EnforceLimits"/> can change so. Every other option is read
+    /// once, when the app starts.
     /// </para>
     /// </summary>
     public GuardMode Mode { get; set; } = GuardMode.Audit;
@@ -91,6 +92,9 @@ public sealed class BehaviorLockOptions
     /// False means that a number over a limit is reported, but never blocked, also in Enforce mode.
     /// Every other access is still blocked. Use it while the limits still come from small test data:
     /// the pending file then shows the numbers that production needs.
+    /// <para>
+    /// A change of this value in the configuration applies while the app runs.
+    /// </para>
     /// </summary>
     public bool EnforceLimits { get; set; } = true;
 
