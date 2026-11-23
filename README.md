@@ -93,7 +93,7 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 ## Install
 
 ```
-dotnet add package BehaviorLock --prerelease
+dotnet add package BehaviorLock
 ```
 
 The package is for .NET 10 with EF Core 10, and for .NET 11 with EF Core 11.

@@ -27,12 +27,12 @@ published with the release, and it names you if you want that. Please keep the d
 
 ## Supported versions
 
-The package is in preview. Only the latest version gets security fixes.
+Only the latest version gets security fixes.
 
 | Version | Supported |
 |---|---|
-| Latest `0.1.0` preview | Yes |
-| Older previews | No |
+| The latest version | Yes |
+| Older versions and all previews | No |
 
 ## What is a vulnerability
 
