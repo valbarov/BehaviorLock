@@ -20,6 +20,8 @@ profile file. Each such change is listed under **Changed** or **Removed**.
   the endpoint, the kind of the access and whether it was blocked.
 - **Request id.** `GuardViolation.RequestId` and the log line of a violation have the id of the request,
   `HttpContext.TraceIdentifier`. So the reason for a 403 can be found from the request.
+- **Placeholders in `PendingPath`.** `{machine}` and `{pid}` give each instance of the app its own pending
+  file in a shared directory.
 - `AddBehaviorLock(configuration)` binds the options to a configuration section and follows its reloads.
   The quick start uses it now.
 

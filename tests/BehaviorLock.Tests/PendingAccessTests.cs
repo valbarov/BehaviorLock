@@ -150,6 +150,37 @@ public sealed class PendingAccessTests(ProfileFixture fixture) : IDisposable
         Assert.Equal(2, ReadFile(PendingPath)["GET /products"].Length);
     }
 
+    [Theory]
+    [InlineData("pending.{machine}.json", "pending.<machine>.json")]
+    [InlineData("pending.{pid}.json", "pending.<pid>.json")]
+    [InlineData("{machine}/{pid}/pending.json", "<machine>/<pid>/pending.json")]
+    [InlineData("pending.{MACHINE}.{Pid}.json", "pending.<machine>.<pid>.json")]
+    [InlineData("pending.{machine}.{machine}.json", "pending.<machine>.<machine>.json")]
+    public void Placeholders_give_each_instance_its_own_pending_file(string path, string expected)
+    {
+        expected = expected
+            .Replace("<machine>", Environment.MachineName)
+            .Replace("<pid>", Environment.ProcessId.ToString());
+        var options = Options.Create(new BehaviorLockOptions { PendingPath = path });
+        var pending = new PendingAccesses(options, new ContentRoot(_directory), new EndpointProfile(), NullLogger<PendingAccesses>.Instance);
+
+        pending.Report(new GuardViolation("GET /products", ResourceAccess.Sql("SELECT * FROM Users"), Blocked: false));
+        pending.Write();
+
+        Assert.Equal(Path.GetFullPath(expected, _directory), pending.Location);
+        Assert.Equal(["sql: SELECT * FROM Users"], ReadFile(pending.Location!)["GET /products"]);
+    }
+
+    [Theory]
+    [InlineData("pending.json")]
+    [InlineData("pending.{host}.json")]
+    [InlineData("{3f2504e0-4f89-11d3-9a0c-0305e82c3301}/pending.json")]
+    [InlineData("pending.{machine.json")]
+    public void Other_text_in_the_pending_path_stays_as_it_is(string path)
+    {
+        Assert.Equal(path, PendingAccesses.Expand(path));
+    }
+
     [Fact]
     public void No_pending_path_means_no_file()
     {

@@ -108,7 +108,7 @@ app.UseBehaviorLock();
 | `Mode` | `Audit` | The global mode. It can change while the app runs. See [Modes](#modes) |
 | `ProfilePath` | `behavior.lock.json` | The recorded profile. See [Deploy the profile](#deploy-the-profile) |
 | `ApprovedPath` | Not set | The file with reviewed accesses. See [Find the gaps in production](#find-the-gaps-in-production) |
-| `PendingPath` | Not set | The file where the guard writes unknown accesses. Not set means that no file is written |
+| `PendingPath` | Not set | The file where the guard writes unknown accesses. Not set means that no file is written. It can have the placeholders `{machine}` and `{pid}`. See [Find the gaps in production](#find-the-gaps-in-production) |
 | `PendingLimit` | `1000` | The largest number of accesses in the pending file |
 | `CheckCallers` | `true` | Records and checks the kind of caller. See [Callers](#callers) |
 | `CallerClaims` | Empty | More claim types that are part of the kind of caller, for example `scope`. See [Callers](#callers) |
@@ -486,7 +486,17 @@ Things to know:
   See [Limits](#limits).
 - `Enforce` mode stops a request at its first unknown access, so the pending file gets one entry per
   request. `Audit` mode lets the request finish and writes all its unknown accesses.
-- Each instance of the app writes its own pending file. Give each instance its own path.
+- Each instance of the app writes its own pending file. Give each instance its own path. When the instances
+  share one directory, use a placeholder in `PendingPath`, for example
+  `/var/lib/shop/behavior.lock.pending.{machine}.json`:
+
+  | Placeholder | Value | Use it for |
+  |---|---|---|
+  | `{machine}` | The name of the machine. In a container this is the name of the container or pod | Containers that write to one shared volume |
+  | `{pid}` | The id of the process. In a container it is often `1` for every instance | Several processes on one machine |
+
+  A new container or a new process then starts a new file, and the old files stay. Review them and delete
+  them, so that the directory does not grow without end.
 - `Learn` mode ignores the approved file, so the recording never copies approved accesses into the profile.
 - A missing approved file gives a warning at startup. The app starts, and only the profile is used.
 
@@ -594,8 +604,9 @@ Two attacks are **not** stopped. [`KnownLimitTests`](tests/BehaviorLock.Tests/Kn
 - **The approved file and the mode of an endpoint weaken the guard when they are used without care.**
   An approved attack is legal from then on, and an endpoint with the mode `Off` or `Audit` is not protected.
   Review both in the pull request.
-- **The pending file is local to one instance.** There is no tool yet that collects the files of many
-  instances or copies entries to the approved file. Both steps are done by hand.
+- **The pending file is local to one instance.** The placeholders in `PendingPath` keep the files of many
+  instances apart, but there is no tool yet that puts them together or copies entries to the approved file.
+  Both steps are done by hand.
 - **The guard runs inside the app process.** An attacker with full code execution can turn it off.
 - **The SQL normalizer is a small scanner, not a parser.** It has rules for SQLite, SQL Server, PostgreSQL and
   MySQL; see [SQL dialects](#sql-dialects). The rules for MySQL 8.4 and PostgreSQL 17 were compared with real
