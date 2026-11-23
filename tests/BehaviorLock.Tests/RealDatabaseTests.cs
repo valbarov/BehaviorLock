@@ -12,7 +12,7 @@ public sealed class RealDatabaseTheoryAttribute : TheoryAttribute
     {
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(variable)))
         {
-            Skip = $"Set {variable} to a connection string to run this test. See the README.";
+            Skip = $"Set {variable} to a connection string to run this test. See docs/development.md.";
         }
     }
 }

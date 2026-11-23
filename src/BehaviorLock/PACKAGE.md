@@ -67,7 +67,7 @@ Switch to `Enforce` when the reports stop.
 
 ## Documentation
 
-The full documentation is in the [repository](https://github.com/valbarov/BehaviorLock#readme): the modes,
+The full documentation is in the [repository](https://github.com/valbarov/BehaviorLock#documentation): the modes,
 the options, how to record the profile from tests, how to find the gaps in production, the metrics, and the
 known limits.
 
