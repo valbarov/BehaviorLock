@@ -100,22 +100,27 @@ The package is for .NET 10 with EF Core 10, and for .NET 11 with EF Core 11.
 
 ## Quick start
 
+Start with `Audit` mode. The guard then records and reports, but it blocks nothing. So this first step cannot
+break a legal request.
+
+### 1. Add the guard to the app
+
 ```csharp
 using BehaviorLock;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Register the guard. This also covers the outbound calls of every HttpClient.
+// Register the guard. This also covers the outbound calls of every HttpClient.
 builder.Services.AddBehaviorLock(builder.Configuration.GetSection("BehaviorLock"));
 
-// 2. Let the guard check the commands of your DbContext.
+// Let the guard check the commands of your DbContext.
 builder.Services.AddDbContext<ShopDb>((services, options) => options
     .UseSqlite(connectionString)
     .UseBehaviorLock(services));
 
 var app = builder.Build();
 
-// 3. Add the middleware after routing, authentication and authorization, and before the endpoints.
+// Add the middleware after routing, authentication and authorization, and before the endpoints.
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseBehaviorLock();
@@ -123,13 +128,63 @@ app.UseBehaviorLock();
 
 ```json
 "BehaviorLock": {
-  "Mode": "Enforce",
-  "ProfilePath": "behavior.lock.json"
+  "Mode": "Audit"
 }
 ```
 
-`Enforce` mode needs the profile. [The profile](docs/profile.md) says how to record it from your tests, and
-[Modes](docs/modes.md) has the recommended rollout.
+`Audit` is also the mode when the configuration has none.
+
+### 2. Record the profile in a test
+
+Add a test that starts the app in `Learn` mode and sends the legal requests. It needs the package
+`Microsoft.AspNetCore.Mvc.Testing`.
+
+```csharp
+public sealed class RecordProfile
+{
+    [Fact]
+    public async Task Record_the_legal_requests()
+    {
+        await using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+                services.Configure<BehaviorLockOptions>(options => options.Mode = GuardMode.Learn)));
+
+        using var client = app.CreateClient();
+
+        // One legal request for each legal path of each endpoint.
+        await client.GetAsync("/products/1");
+        await client.GetAsync("/products/search?name=Lap");
+
+        // The end of the test stops the app, and that saves the profile.
+    }
+}
+```
+
+The test writes `behavior.lock.json` into the project folder of the app. Two things to know:
+
+- Run the test against the kind of database that production uses. Each database provider writes its own SQL.
+  See [Record with the database of production](docs/profile.md#record-with-the-database-of-production).
+- `Learn` mode adds to a profile that is already there. Delete the file before the recording, so that an
+  access that the code no longer makes leaves the profile.
+  See [Record the profile from tests](docs/profile.md#record-the-profile-from-tests) for the full pattern.
+
+### 3. Commit the profile
+
+Commit `behavior.lock.json`. From now on, a pull request that makes an endpoint read a new table, call a new
+host or take a new kind of caller also changes this file. The reviewer sees it in the diff.
+
+### 4. Deploy and watch
+
+A web project publishes the JSON files of its folder, so the profile goes out with the app. In production,
+each access that is not in the profile gives a log warning and counts in a metric. No request is blocked.
+See [Alerts and metrics](docs/monitoring.md).
+
+### Next: block
+
+When the warnings have stopped, change the mode to `Enforce`. Then an access that is not in the profile never
+runs, and the request gets a 403. [Modes](docs/modes.md) has the recommended rollout, also for one endpoint at
+a time. [Find the gaps in production](docs/profile.md#find-the-gaps-in-production) says how to collect and
+review what the tests missed.
 
 ## Documentation
 
