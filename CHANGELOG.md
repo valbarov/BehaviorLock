@@ -16,6 +16,8 @@ profile file. Each such change is listed under **Changed** or **Removed**.
   have stopped the start is refused, and each change is logged as a warning.
 - **Limit change in a running app.** A change of `EnforceLimits` in the configuration applies without a restart
   too. So a limit that blocks legal requests can be turned into a report, while everything else stays blocked.
+- **Metrics.** The counter `behaviorlock.violations` of the meter `BehaviorLock` counts every violation, with
+  the endpoint, the kind of the access and whether it was blocked.
 - `AddBehaviorLock(configuration)` binds the options to a configuration section and follows its reloads.
   The quick start uses it now.
 

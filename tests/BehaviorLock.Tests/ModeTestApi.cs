@@ -42,6 +42,8 @@ public sealed class ModeTestApi : IAsyncDisposable
 
     public EndpointProfile LoadedProfile => _app.Services.GetRequiredService<EndpointProfile>();
 
+    public IServiceProvider Services => _app.Services;
+
     /// <summary>Changes the mode in the configuration of the running API, like an edit of appsettings.json does.</summary>
     public void ChangeMode(GuardMode mode) => ReloadableSettings.Change(_app.Configuration, mode);
 
