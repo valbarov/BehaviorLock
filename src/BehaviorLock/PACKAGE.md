@@ -8,7 +8,7 @@ bugs that nobody has seen before, as long as they change what the endpoint touch
 much it returns.
 
 > Status: MVP. It targets .NET 10 and .NET 11, and it covers EF Core and `HttpClient`.
-> Read the [known limits](https://github.com/valbarov/BehaviorLock#known-limits) before you use it.
+> Read the [known limits](https://github.com/valbarov/BehaviorLock/blob/main/docs/known-limits.md) before you use it.
 
 ## How it works
 
@@ -57,12 +57,18 @@ app.UseBehaviorLock();
 
 ```json
 "BehaviorLock": {
-  "Mode": "Audit",
-  "ProfilePath": "behavior.lock.json"
+  "Mode": "Audit"
 }
 ```
 
-Start with `Audit` mode. It reports an access that is not in the profile, but it does not block it.
+Start with `Audit` mode. It reports an access that is not in the profile, but it does not block it. So this
+first step cannot break a legal request:
+
+1. Record the profile in a test that runs the app in `Learn` mode and sends the legal requests.
+2. Commit `behavior.lock.json`. A pull request that changes what an endpoint touches then shows it in the diff.
+3. Deploy the file with the app, and watch the warnings.
+
+The [quick start](https://github.com/valbarov/BehaviorLock#quick-start) has the test and the details.
 Switch to `Enforce` when the reports stop.
 
 ## Documentation
