@@ -17,7 +17,7 @@ internal sealed class GuardMiddleware(
     IGuardContextAccessor contextAccessor,
     EndpointProfile profile,
     IAccessGuard guard,
-    GlobalMode globalMode,
+    LiveSettings settings,
     IOptions<BehaviorLockOptions> options)
 {
     // The number does not matter here: it only names the limit to look up.
@@ -25,7 +25,7 @@ internal sealed class GuardMiddleware(
 
     public async Task InvokeAsync(HttpContext http)
     {
-        var global = globalMode.Current;
+        var global = settings.Mode;
 
         if (global == GuardMode.Off || http.GetEndpoint() is not RouteEndpoint routeEndpoint)
         {
@@ -116,7 +116,7 @@ internal sealed class GuardMiddleware(
         }
 
         // Only a request that blocks limits stops a write. The others report the size when they have finished.
-        var stopsWrites = mode == GuardMode.Enforce && options.Value.EnforceLimits;
+        var stopsWrites = mode == GuardMode.Enforce && settings.EnforceLimits;
         var body = new GuardedResponseBody(serverBody, guard, context, stopsWrites ? limit : null);
         http.Features.Set<IHttpResponseBodyFeature>(body);
         return body;

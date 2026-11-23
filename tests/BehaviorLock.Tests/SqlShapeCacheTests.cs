@@ -171,7 +171,7 @@ public sealed class SqlShapeCacheTests
         }
 
         var wrapped = Options.Create(options);
-        var guard = new AccessGuard(_accessor, _profile, [_sink], new GlobalMode(mode), wrapped);
+        var guard = new AccessGuard(_accessor, _profile, [_sink], new LiveSettings(mode));
         return new GuardDbCommandInterceptor(guard, _normalizer, options: wrapped);
     }
 

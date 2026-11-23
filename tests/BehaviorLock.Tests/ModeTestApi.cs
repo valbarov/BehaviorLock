@@ -38,12 +38,12 @@ public sealed class ModeTestApi : IAsyncDisposable
     public CollectingLogs Logs { get; }
 
     /// <summary>The global mode that the guard uses now.</summary>
-    public GuardMode Mode => _app.Services.GetRequiredService<GlobalMode>().Current;
+    public GuardMode Mode => _app.Services.GetRequiredService<LiveSettings>().Mode;
 
     public EndpointProfile LoadedProfile => _app.Services.GetRequiredService<EndpointProfile>();
 
     /// <summary>Changes the mode in the configuration of the running API, like an edit of appsettings.json does.</summary>
-    public void ChangeMode(GuardMode mode) => ModeSetting.Change(_app.Configuration, mode);
+    public void ChangeMode(GuardMode mode) => ReloadableSettings.Change(_app.Configuration, mode);
 
     /// <summary>Starts the API. Without a profile, no profile file is written.</summary>
     public static async Task<ModeTestApi> StartAsync(
@@ -62,9 +62,9 @@ public sealed class ModeTestApi : IAsyncDisposable
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
         builder.Logging.AddProvider(logs);
-        ModeSetting.Add(builder.Configuration, global);
+        ReloadableSettings.Add(builder.Configuration, global);
         builder.Services.AddBehaviorLock(
-            builder.Configuration.GetSection(ModeSetting.Section), options => options.ProfilePath = profilePath);
+            builder.Configuration.GetSection(ReloadableSettings.Section), options => options.ProfilePath = profilePath);
         builder.Services.AddSingleton<IViolationSink>(violations);
         builder.Services.AddControllers().AddApplicationPart(typeof(ModeTestController).Assembly);
         services?.Invoke(builder.Services);

@@ -9,14 +9,14 @@ public sealed class GuardScopes
 {
     private readonly IGuardContextAccessor contextAccessor;
     private readonly EndpointProfile profile;
-    private readonly GlobalMode globalMode;
+    private readonly LiveSettings settings;
 
     // The guard creates the one instance. Get it from the services of the app.
-    internal GuardScopes(IGuardContextAccessor contextAccessor, EndpointProfile profile, GlobalMode globalMode)
+    internal GuardScopes(IGuardContextAccessor contextAccessor, EndpointProfile profile, LiveSettings settings)
     {
         this.contextAccessor = contextAccessor;
         this.profile = profile;
-        this.globalMode = globalMode;
+        this.settings = settings;
     }
 
     /// <summary>
@@ -48,7 +48,7 @@ public sealed class GuardScopes
             GuardModes.RequireEndpointMode(own, nameof(mode));
         }
 
-        if (globalMode.Current == GuardMode.Learn)
+        if (settings.Mode == GuardMode.Learn)
         {
             profile.AddEndpoint(name);
         }

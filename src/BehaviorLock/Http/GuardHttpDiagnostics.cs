@@ -24,7 +24,7 @@ namespace BehaviorLock;
 /// </summary>
 internal sealed class GuardHttpDiagnostics(
     IAccessGuard guard,
-    GlobalMode globalMode,
+    LiveSettings settings,
     IOptions<BehaviorLockOptions> options,
     ILogger<GuardHttpDiagnostics> logger)
     : IHostedService, IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>, IDisposable
@@ -55,8 +55,8 @@ internal sealed class GuardHttpDiagnostics(
         }
 
         // Off mode listens to nothing. The listening starts when the mode changes while the app runs.
-        globalMode.Changed += ListenUnlessOff;
-        ListenUnlessOff(globalMode.Current);
+        settings.ModeChanged += ListenUnlessOff;
+        ListenUnlessOff(settings.Mode);
         return Task.CompletedTask;
     }
 
@@ -107,7 +107,7 @@ internal sealed class GuardHttpDiagnostics(
 
     public void Dispose()
     {
-        globalMode.Changed -= ListenUnlessOff;
+        settings.ModeChanged -= ListenUnlessOff;
 
         lock (_lock)
         {

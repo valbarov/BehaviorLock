@@ -15,6 +15,10 @@ namespace BehaviorLock;
 /// configuration can turn the blocking off without a new deploy. Only Off, Audit and Enforce can change
 /// into each other. A change that would have stopped the start is refused, and the mode stays as it is.
 /// </para>
+/// <para>
+/// It follows <see cref="BehaviorLockOptions.EnforceLimits"/> in the same way. Every value of it is legal,
+/// so that change is never refused, also when the mode of the same reload is.
+/// </para>
 /// </summary>
 internal sealed class ProfileLifecycle(
     EndpointProfile profile,
@@ -22,7 +26,7 @@ internal sealed class ProfileLifecycle(
     IEnumerable<EndpointDataSource> endpointSources,
     DatabaseCheck databaseCheck,
     IServiceScopeFactory scopes,
-    GlobalMode globalMode,
+    LiveSettings settings,
     IOptionsMonitor<BehaviorLockOptions> options,
     ILogger<ProfileLifecycle> logger) : IHostedLifecycleService
 {
@@ -30,12 +34,12 @@ internal sealed class ProfileLifecycle(
     private bool _saved;
 
     // Guards the fields below. A change of the options comes on a thread of the configuration.
-    private readonly Lock _modeLock = new();
+    private readonly Lock _changeLock = new();
     private IDisposable? _changes;
     private bool _started;
 
-    // The mode of a change that came before the app had started.
-    private GuardMode? _early;
+    // The options of the last change that came before the app had started.
+    private BehaviorLockOptions? _early;
 
     // The mode of the last refused change. One change of a file can come more than once, and is logged once.
     private GuardMode? _refused;
@@ -46,7 +50,7 @@ internal sealed class ProfileLifecycle(
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        var mode = globalMode.Current;
+        var mode = settings.Mode;
 
         // Off mode does not touch the database. The check is made when the mode changes.
         var problem = mode == GuardMode.Off ? null : Problem(mode);
@@ -69,7 +73,7 @@ internal sealed class ProfileLifecycle(
         {
             if (string.IsNullOrEmpty(name))
             {
-                OnOptionsChanged(changed.Mode);
+                OnOptionsChanged(changed);
             }
         });
         return Task.CompletedTask;
@@ -81,17 +85,17 @@ internal sealed class ProfileLifecycle(
     /// </summary>
     public Task StartedAsync(CancellationToken cancellationToken)
     {
-        if (globalMode.Current == GuardMode.Audit && _problem is not null && FindEnforcedEndpoint() is { } endpoint)
+        if (settings.Mode == GuardMode.Audit && _problem is not null && FindEnforcedEndpoint() is { } endpoint)
         {
             throw new InvalidOperationException($"BehaviorLock endpoint '{endpoint}' has the mode Enforce, but {_problem}");
         }
 
-        lock (_modeLock)
+        lock (_changeLock)
         {
             _started = true;
-            if (_early is { } wanted)
+            if (_early is { } changed)
             {
-                Apply(wanted);
+                Apply(changed);
             }
         }
 
@@ -108,7 +112,7 @@ internal sealed class ProfileLifecycle(
     {
         _changes?.Dispose();
 
-        if (globalMode.Current == GuardMode.Learn)
+        if (settings.Mode == GuardMode.Learn)
         {
             // A host can run StopAsync twice in parallel (WebApplicationFactory does). Save once,
             // and let the second call wait, so that the file is complete when any of the calls returns.
@@ -126,66 +130,88 @@ internal sealed class ProfileLifecycle(
         return Task.CompletedTask;
     }
 
-    private void OnOptionsChanged(GuardMode wanted)
+    private void OnOptionsChanged(BehaviorLockOptions changed)
     {
-        lock (_modeLock)
+        lock (_changeLock)
         {
             // The endpoints are not known before the start has ended. StartedAsync applies the last change.
             if (!_started)
             {
-                _early = wanted;
+                _early = changed;
                 return;
             }
 
-            Apply(wanted);
+            Apply(changed);
         }
     }
 
     /// <summary>
-    /// Changes the global mode, or logs why not. It runs inside the reload of the configuration,
-    /// so no exception may leave it.
+    /// Takes over the settings that can change while the app runs. It runs inside the reload of the
+    /// configuration, so no exception may leave it.
     /// </summary>
-    private void Apply(GuardMode wanted)
+    private void Apply(BehaviorLockOptions changed)
     {
-        var current = globalMode.Current;
         try
         {
-            if (wanted == current)
-            {
-                _refused = null;
-                return;
-            }
-
-            if (WhyNot(current, wanted) is { } reason)
-            {
-                if (_refused != wanted)
-                {
-                    _refused = wanted;
-                    logger.LogError(
-                        "BehaviorLock stays in the mode {Mode}. The change to {Wanted} was refused: {Reason}",
-                        current,
-                        wanted,
-                        reason);
-                }
-
-                return;
-            }
-
-            _refused = null;
-            globalMode.Change(wanted);
-
-            // A change of the mode changes what an attacker can do, so it must be easy to find in the log.
-            logger.LogWarning("BehaviorLock mode changed from {Old} to {New}", current, wanted);
-            WarnAboutEmptyProfile(wanted);
+            // The limits come first: they need no check, so a refused mode does not hold them back.
+            ApplyEnforceLimits(changed.EnforceLimits);
+            ApplyMode(changed.Mode);
         }
         catch (Exception exception)
         {
             logger.LogError(
                 exception,
-                "BehaviorLock failed in the change of the mode to {Wanted}. The mode is now {Mode}",
-                wanted,
-                globalMode.Current);
+                "BehaviorLock failed in a change of its configuration. The mode is now {Mode} and EnforceLimits is {EnforceLimits}",
+                settings.Mode,
+                settings.EnforceLimits);
         }
+    }
+
+    private void ApplyEnforceLimits(bool wanted)
+    {
+        var current = settings.EnforceLimits;
+        if (wanted == current)
+        {
+            return;
+        }
+
+        settings.ChangeEnforceLimits(wanted);
+
+        // Like a change of the mode, this changes what the guard blocks. So it is a warning too.
+        logger.LogWarning("BehaviorLock EnforceLimits changed from {Old} to {New}", current, wanted);
+    }
+
+    /// <summary>Changes the global mode, or logs why not.</summary>
+    private void ApplyMode(GuardMode wanted)
+    {
+        var current = settings.Mode;
+        if (wanted == current)
+        {
+            _refused = null;
+            return;
+        }
+
+        if (WhyNot(current, wanted) is { } reason)
+        {
+            if (_refused != wanted)
+            {
+                _refused = wanted;
+                logger.LogError(
+                    "BehaviorLock stays in the mode {Mode}. The change to {Wanted} was refused: {Reason}",
+                    current,
+                    wanted,
+                    reason);
+            }
+
+            return;
+        }
+
+        _refused = null;
+        settings.ChangeMode(wanted);
+
+        // A change of the mode changes what an attacker can do, so it must be easy to find in the log.
+        logger.LogWarning("BehaviorLock mode changed from {Old} to {New}", current, wanted);
+        WarnAboutEmptyProfile(wanted);
     }
 
     /// <summary>Returns why the mode cannot change, or null when it can.</summary>

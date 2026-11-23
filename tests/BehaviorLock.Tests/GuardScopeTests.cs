@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace BehaviorLock.Tests;
 
@@ -155,16 +154,16 @@ public sealed class GuardScopeTests : IDisposable
     public void A_change_of_the_global_mode_reaches_a_scope_that_is_already_open()
     {
         // A job can keep one scope open for hours. The kill switch must not wait for its end.
-        var mode = new GlobalMode(GuardMode.Enforce);
-        var guard = Guard(mode);
+        var settings = new LiveSettings(GuardMode.Enforce);
+        var guard = Guard(settings);
 
-        using var scope = new GuardScopes(_accessor, _profile, mode).Begin(Job);
+        using var scope = new GuardScopes(_accessor, _profile, settings).Begin(Job);
         Assert.Throws<GuardViolationException>(() => guard.Check(Unknown));
 
-        mode.Change(GuardMode.Audit);
+        settings.ChangeMode(GuardMode.Audit);
         guard.Check(Unknown);
 
-        mode.Change(GuardMode.Off);
+        settings.ChangeMode(GuardMode.Off);
         guard.Check(Unknown);
 
         Assert.False(guard.IsActive);
@@ -176,11 +175,11 @@ public sealed class GuardScopeTests : IDisposable
     [Fact]
     public void A_scope_keeps_its_own_mode_when_the_global_mode_changes_to_audit()
     {
-        var mode = new GlobalMode(GuardMode.Enforce);
-        var guard = Guard(mode);
+        var settings = new LiveSettings(GuardMode.Enforce);
+        var guard = Guard(settings);
 
-        using var scope = new GuardScopes(_accessor, _profile, mode).Begin(Job, GuardMode.Enforce);
-        mode.Change(GuardMode.Audit);
+        using var scope = new GuardScopes(_accessor, _profile, settings).Begin(Job, GuardMode.Enforce);
+        settings.ChangeMode(GuardMode.Audit);
 
         Assert.Throws<GuardViolationException>(() => guard.Check(Unknown));
     }
@@ -230,10 +229,9 @@ public sealed class GuardScopeTests : IDisposable
         await work(services.ServiceProvider.GetRequiredService<SampleApi.ShopDb>());
     }
 
-    private GuardScopes Scopes(GuardMode mode) => new(_accessor, _profile, new GlobalMode(mode));
+    private GuardScopes Scopes(GuardMode mode) => new(_accessor, _profile, new LiveSettings(mode));
 
-    private AccessGuard Guard(GuardMode mode) => Guard(new GlobalMode(mode));
+    private AccessGuard Guard(GuardMode mode) => Guard(new LiveSettings(mode));
 
-    private AccessGuard Guard(GlobalMode mode) =>
-        new(_accessor, _profile, [_sink], mode, Options.Create(new BehaviorLockOptions()));
+    private AccessGuard Guard(LiveSettings settings) => new(_accessor, _profile, [_sink], settings);
 }

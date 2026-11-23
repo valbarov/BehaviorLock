@@ -26,17 +26,21 @@ public sealed class TinyApi : IAsyncDisposable
     private readonly string _directory;
     private readonly WebApplication _app;
 
-    private TinyApi(string directory, WebApplication app, CollectingSink violations)
+    private TinyApi(string directory, WebApplication app, CollectingSink violations, CollectingLogs logs)
     {
         _directory = directory;
         _app = app;
         Violations = violations;
+        Logs = logs;
     }
 
     /// <summary>A client of the test server. It exists when the API has started.</summary>
     public HttpClient Client { get; private set; } = null!;
 
     public CollectingSink Violations { get; }
+
+    /// <summary>The warnings and errors of the guard.</summary>
+    public CollectingLogs Logs { get; }
 
     public EndpointProfile Profile => _app.Services.GetRequiredService<EndpointProfile>();
 
@@ -46,7 +50,11 @@ public sealed class TinyApi : IAsyncDisposable
     public int Calls { get; private set; }
 
     /// <summary>Changes the mode in the configuration of the running API, like an edit of appsettings.json does.</summary>
-    public void ChangeMode(GuardMode mode) => ModeSetting.Change(_app.Configuration, mode);
+    public void ChangeMode(GuardMode mode) => ReloadableSettings.Change(_app.Configuration, mode);
+
+    /// <summary>Changes settings in the configuration of the running API, all in one reload. Null keeps a value.</summary>
+    public void Change(GuardMode? mode = null, bool? enforceLimits = null) =>
+        ReloadableSettings.Change(_app.Configuration, mode, enforceLimits);
 
     /// <summary>Starts the API with this content of the profile file.</summary>
     public static async Task<TinyApi> StartAsync(GuardMode mode, string profile, Action<BehaviorLockOptions>? configure = null)
@@ -56,11 +64,13 @@ public sealed class TinyApi : IAsyncDisposable
         await File.WriteAllTextAsync(profilePath, profile);
 
         var violations = new CollectingSink();
+        var logs = new CollectingLogs();
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = directory });
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
-        ModeSetting.Add(builder.Configuration, mode);
-        builder.Services.AddBehaviorLock(builder.Configuration.GetSection(ModeSetting.Section), options =>
+        builder.Logging.AddProvider(logs);
+        ReloadableSettings.Add(builder.Configuration, mode);
+        builder.Services.AddBehaviorLock(builder.Configuration.GetSection(ReloadableSettings.Section), options =>
         {
             options.ProfilePath = profilePath;
             configure?.Invoke(options);
@@ -69,7 +79,7 @@ public sealed class TinyApi : IAsyncDisposable
         builder.Services.AddHttpClient();
 
         var app = builder.Build();
-        var api = new TinyApi(directory, app, violations);
+        var api = new TinyApi(directory, app, violations, logs);
 
         // Stands for the authentication of a real app. It runs before the guard.
         app.Use(async (http, next) =>

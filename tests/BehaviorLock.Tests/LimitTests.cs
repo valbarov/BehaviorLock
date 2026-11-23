@@ -168,6 +168,20 @@ public sealed class LimitTests : IDisposable
     }
 
     [Fact]
+    public void A_change_of_enforce_limits_applies_to_the_next_check()
+    {
+        _profile.Allow(Endpoint, ResourceAccess.Rows(Shape, 10));
+        var settings = new LiveSettings(GuardMode.Enforce);
+        var guard = new AccessGuard(_accessor, _profile, [_sink], settings);
+
+        settings.ChangeEnforceLimits(false);
+        guard.Check(ResourceAccess.Rows(Shape, 37));
+
+        settings.ChangeEnforceLimits(true);
+        Assert.Throws<GuardViolationException>(() => guard.Check(ResourceAccess.Rows(Shape, 37)));
+    }
+
+    [Fact]
     public void Every_other_access_is_still_blocked_when_limits_are_not_enforced()
     {
         _profile.Allow(Endpoint, new ResourceAccess(ResourceAccess.CallerKind, "signed in, role admin"));
@@ -235,6 +249,6 @@ public sealed class LimitTests : IDisposable
     {
         var options = new BehaviorLockOptions();
         configure?.Invoke(options);
-        return new(_accessor, _profile, [_sink], new GlobalMode(mode), Options.Create(options));
+        return new(_accessor, _profile, [_sink], new LiveSettings(mode, options.EnforceLimits));
     }
 }
