@@ -9,7 +9,7 @@
   <PropertyGroup>
     <PackageId>BehaviorLock</PackageId>
     <!-- The release workflow takes the version from the git tag. This one is for a local pack. -->
-    <Version>0.1.0-preview.1</Version>
+    <Version>0.2.0</Version>
     <Authors>Vadim Albarov</Authors>
     <Copyright>Copyright 2026 Vadim Albarov</Copyright>
     <Description>Active security for ASP.NET Core APIs. Records what each endpoint touches and blocks everything else.</Description>

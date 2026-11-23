@@ -4,10 +4,17 @@ All notable changes of the package are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-While the version is below 1.0.0, a new preview can break the public types, the options and the format of the
-profile file. Each such change is listed under **Changed** or **Removed**.
+While the version is below 1.0.0, a new minor version can break the public types, the options and the format
+of the profile file. Each such change is listed under **Changed** or **Removed**.
 
 ## [Unreleased]
+
+No changes yet.
+
+## [0.2.0] - 2026-11-22
+
+The first version without the preview mark. The mode and the limits can now change in a running app, and each
+violation can be counted and traced to its request.
 
 ### Added
 
@@ -63,5 +70,6 @@ The first public preview, for .NET 10 with EF Core 10 and for .NET 11 with EF Co
   `IGuardModeMetadata`.
 - `EndpointCoverage.FindUnprofiled` finds the endpoints that have no profile, for a test that fails the build.
 
-[Unreleased]: https://github.com/valbarov/BehaviorLock/compare/v0.1.0-preview.1...HEAD
+[Unreleased]: https://github.com/valbarov/BehaviorLock/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/valbarov/BehaviorLock/compare/v0.1.0-preview.1...v0.2.0
 [0.1.0-preview.1]: https://github.com/valbarov/BehaviorLock/releases/tag/v0.1.0-preview.1

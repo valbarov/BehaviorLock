@@ -54,11 +54,12 @@ The tests drop and create a table with the name `Users`, so use them only with a
 Before a release, move the entries under "Unreleased" in [CHANGELOG.md](../CHANGELOG.md) to a section for the
 new version.
 
-A version tag publishes the package to nuget.org and creates a GitHub release. The tag gives the version:
+A version tag publishes the package to nuget.org and creates a GitHub release. The tag gives the version.
+A version with a suffix, for example `v1.2.3-preview.1`, becomes a prerelease:
 
 ```
-git tag v0.1.0-preview.1
-git push origin v0.1.0-preview.1
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 The [release workflow](../.github/workflows/release.yml) uses
