@@ -87,5 +87,5 @@ public sealed class AccessGuardTests
     }
 
     private AccessGuard Guard(GuardMode mode) =>
-        new(_accessor, _profile, [_sink], Options.Create(new BehaviorLockOptions { Mode = mode }));
+        new(_accessor, _profile, [_sink], new GlobalMode(mode), Options.Create(new BehaviorLockOptions()));
 }

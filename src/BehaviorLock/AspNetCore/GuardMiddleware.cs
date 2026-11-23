@@ -8,6 +8,7 @@ namespace BehaviorLock;
 /// <summary>
 /// Opens a <see cref="GuardContext"/> for each routed request and turns a blocked access into a 403 response.
 /// The mode of the request comes from the global mode and the <see cref="IGuardModeMetadata"/> of the endpoint.
+/// A change of the global mode applies to the next access, also in a request that is already running.
 /// It also checks the caller before the endpoint runs, and the size of the response body.
 /// Must run after routing, and after authentication and authorization.
 /// </summary>
@@ -16,6 +17,7 @@ internal sealed class GuardMiddleware(
     IGuardContextAccessor contextAccessor,
     EndpointProfile profile,
     IAccessGuard guard,
+    GlobalMode globalMode,
     IOptions<BehaviorLockOptions> options)
 {
     // The number does not matter here: it only names the limit to look up.
@@ -23,7 +25,7 @@ internal sealed class GuardMiddleware(
 
     public async Task InvokeAsync(HttpContext http)
     {
-        var global = options.Value.Mode;
+        var global = globalMode.Current;
 
         if (global == GuardMode.Off || http.GetEndpoint() is not RouteEndpoint routeEndpoint)
         {
@@ -31,7 +33,8 @@ internal sealed class GuardMiddleware(
             return;
         }
 
-        var mode = GuardModes.Effective(global, routeEndpoint.Metadata.GetMetadata<IGuardModeMetadata>()?.Mode);
+        var ownMode = routeEndpoint.Metadata.GetMetadata<IGuardModeMetadata>()?.Mode;
+        var mode = GuardModes.Effective(global, ownMode);
         if (mode == GuardMode.Off)
         {
             await next(http);
@@ -39,7 +42,7 @@ internal sealed class GuardMiddleware(
         }
 
         var endpoint = EndpointKey.Create(http.Request.Method, routeEndpoint);
-        var context = new GuardContext(endpoint, mode);
+        var context = new GuardContext(endpoint, ownMode);
         contextAccessor.Current = context;
 
         if (mode == GuardMode.Learn)
@@ -48,7 +51,7 @@ internal sealed class GuardMiddleware(
         }
 
         var serverBody = http.Features.GetRequiredFeature<IHttpResponseBodyFeature>();
-        var body = CountResponseBody(http, context, serverBody);
+        var body = CountResponseBody(http, context, mode, serverBody);
 
         try
         {
@@ -98,7 +101,8 @@ internal sealed class GuardMiddleware(
     /// Puts a counter in front of the response body of the server. Returns null when the size is not needed:
     /// limits are off, or the profile has no size limit for this endpoint and the mode is not Learn.
     /// </summary>
-    private GuardedResponseBody? CountResponseBody(HttpContext http, GuardContext context, IHttpResponseBodyFeature serverBody)
+    private GuardedResponseBody? CountResponseBody(
+        HttpContext http, GuardContext context, GuardMode mode, IHttpResponseBodyFeature serverBody)
     {
         if (!options.Value.CheckLimits)
         {
@@ -106,13 +110,13 @@ internal sealed class GuardMiddleware(
         }
 
         var limit = profile.LimitOf(context.Endpoint, ResponseSizeLimit);
-        if (limit is null && context.Mode != GuardMode.Learn)
+        if (limit is null && mode != GuardMode.Learn)
         {
             return null;
         }
 
         // Only a request that blocks limits stops a write. The others report the size when they have finished.
-        var stopsWrites = context.Mode == GuardMode.Enforce && options.Value.EnforceLimits;
+        var stopsWrites = mode == GuardMode.Enforce && options.Value.EnforceLimits;
         var body = new GuardedResponseBody(serverBody, guard, context, stopsWrites ? limit : null);
         http.Features.Set<IHttpResponseBodyFeature>(body);
         return body;

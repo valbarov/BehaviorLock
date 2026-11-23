@@ -4,7 +4,7 @@ using SampleApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddBehaviorLock(options => builder.Configuration.GetSection("BehaviorLock").Bind(options));
+builder.Services.AddBehaviorLock(builder.Configuration.GetSection("BehaviorLock"));
 
 builder.Services.AddDbContext<ShopDb>((services, options) => options
     .UseSqlite(services.GetRequiredService<IConfiguration>().GetConnectionString("Shop"))

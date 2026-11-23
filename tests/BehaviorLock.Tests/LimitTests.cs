@@ -233,8 +233,8 @@ public sealed class LimitTests : IDisposable
 
     private AccessGuard Guard(GuardMode mode, Action<BehaviorLockOptions>? configure = null)
     {
-        var options = new BehaviorLockOptions { Mode = mode };
+        var options = new BehaviorLockOptions();
         configure?.Invoke(options);
-        return new(_accessor, _profile, [_sink], Options.Create(options));
+        return new(_accessor, _profile, [_sink], new GlobalMode(mode), Options.Create(options));
     }
 }

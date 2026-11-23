@@ -28,6 +28,7 @@ internal sealed class AccessGuard(
     IGuardContextAccessor contextAccessor,
     EndpointProfile profile,
     IEnumerable<IViolationSink> sinks,
+    GlobalMode globalMode,
     IOptions<BehaviorLockOptions> options) : IAccessGuard
 {
     public bool IsActive => ModeOf(contextAccessor.Current) != GuardMode.Off;
@@ -75,8 +76,8 @@ internal sealed class AccessGuard(
     }
 
     // No context means the access is outside a guarded request, for example startup code.
-    // The middleware puts the mode of the endpoint into the context. A context without a mode uses the global mode.
-    // The global rules are applied here again, so that global Off turns the guard off for every context.
+    // The context has the own mode of the endpoint or scope. The global mode is read for each access,
+    // so a change of it also reaches a request or a scope that is already running.
     private GuardMode ModeOf(GuardContext? context) =>
-        context is null ? GuardMode.Off : GuardModes.Effective(options.Value.Mode, context.Mode);
+        context is null ? GuardMode.Off : GuardModes.Effective(globalMode.Current, context.Mode);
 }

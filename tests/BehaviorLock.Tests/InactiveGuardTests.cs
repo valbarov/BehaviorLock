@@ -52,7 +52,7 @@ public sealed class InactiveGuardTests
     }
 
     private AccessGuard Guard(GuardMode mode) =>
-        new(_accessor, new EndpointProfile(), [], Options.Create(new BehaviorLockOptions { Mode = mode }));
+        new(_accessor, new EndpointProfile(), [], new GlobalMode(mode), Options.Create(new BehaviorLockOptions()));
 
     private sealed class CountingNormalizer : ISqlNormalizer
     {

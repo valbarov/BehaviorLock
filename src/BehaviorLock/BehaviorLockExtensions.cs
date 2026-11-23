@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http;
@@ -11,8 +12,34 @@ namespace BehaviorLock;
 public static class BehaviorLockExtensions
 {
     /// <summary>
+    /// Registers the guard and binds its options to a configuration section, for example
+    /// <c>builder.Configuration.GetSection("BehaviorLock")</c>. Outbound calls of every <c>HttpClient</c>
+    /// are covered; see <see cref="BehaviorLockOptions.CheckAllHttpClients"/>.
+    /// <para>
+    /// The guard follows a change of <see cref="BehaviorLockOptions.Mode"/> in this configuration while
+    /// the app runs. Every other option is read once, when the app starts.
+    /// </para>
+    /// </summary>
+    /// <param name="services">The services of the app.</param>
+    /// <param name="configuration">The section with the options.</param>
+    /// <param name="configure">Changes the options after they were read from the configuration.</param>
+    public static IServiceCollection AddBehaviorLock(
+        this IServiceCollection services, IConfiguration configuration, Action<BehaviorLockOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        // This also tells the options when the configuration has changed.
+        services.Configure<BehaviorLockOptions>(configuration);
+        return services.AddBehaviorLock(configure);
+    }
+
+    /// <summary>
     /// Registers the guard. Outbound calls of every <c>HttpClient</c> are covered; see
     /// <see cref="BehaviorLockOptions.CheckAllHttpClients"/>.
+    /// <para>
+    /// The options that this overload sets are fixed while the app runs. Use the overload with a
+    /// configuration to change the mode of a running app.
+    /// </para>
     /// </summary>
     public static IServiceCollection AddBehaviorLock(
         this IServiceCollection services, Action<BehaviorLockOptions>? configure = null)
@@ -23,6 +50,8 @@ public static class BehaviorLockExtensions
             options.Configure(configure);
         }
 
+        services.TryAddSingleton(provider =>
+            new GlobalMode(provider.GetRequiredService<IOptions<BehaviorLockOptions>>().Value.Mode));
         services.TryAddSingleton<IGuardContextAccessor, GuardContextAccessor>();
         services.TryAddSingleton<IProfileStore, JsonFileProfileStore>();
         services.TryAddSingleton<ApprovedAccesses>();
@@ -37,7 +66,7 @@ public static class BehaviorLockExtensions
         services.TryAddSingleton(provider => new GuardScopes(
             provider.GetRequiredService<IGuardContextAccessor>(),
             provider.GetRequiredService<EndpointProfile>(),
-            provider.GetRequiredService<IOptions<BehaviorLockOptions>>()));
+            provider.GetRequiredService<GlobalMode>()));
         services.TryAddSingleton<DatabaseCheck>();
         services.TryAddSingleton<GuardDbCommandInterceptor>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IViolationSink, LoggingViolationSink>());

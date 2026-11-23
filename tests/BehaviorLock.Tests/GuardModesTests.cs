@@ -116,7 +116,7 @@ public sealed class GuardModesTests
     }
 
     private AccessGuard Guard(GuardMode global) =>
-        new(_accessor, new EndpointProfile(), [_sink], Options.Create(new BehaviorLockOptions { Mode = global }));
+        new(_accessor, new EndpointProfile(), [_sink], new GlobalMode(global), Options.Create(new BehaviorLockOptions()));
 
     private sealed class RecordingConventionBuilder : IEndpointConventionBuilder
     {

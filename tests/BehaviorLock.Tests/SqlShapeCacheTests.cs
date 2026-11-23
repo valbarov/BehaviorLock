@@ -164,14 +164,15 @@ public sealed class SqlShapeCacheTests
 
     private GuardDbCommandInterceptor Interceptor(GuardMode mode, int? size = null)
     {
-        var options = new BehaviorLockOptions { Mode = mode };
+        var options = new BehaviorLockOptions();
         if (size is { } number)
         {
             options.SqlShapeCacheSize = number;
         }
 
         var wrapped = Options.Create(options);
-        return new GuardDbCommandInterceptor(new AccessGuard(_accessor, _profile, [_sink], wrapped), _normalizer, options: wrapped);
+        var guard = new AccessGuard(_accessor, _profile, [_sink], new GlobalMode(mode), wrapped);
+        return new GuardDbCommandInterceptor(guard, _normalizer, options: wrapped);
     }
 
     private sealed class CountingNormalizer : ISqlNormalizer

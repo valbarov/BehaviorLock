@@ -22,6 +22,10 @@ public sealed class BehaviorLockOptions
     /// <summary>
     /// The global mode. The default is <see cref="GuardMode.Audit"/>. One endpoint or route group can have
     /// its own mode; see <see cref="BehaviorLockAttribute"/>.
+    /// <para>
+    /// A change of this value in the configuration applies while the app runs, between Off, Audit and
+    /// Enforce. Every other option is read once, when the app starts.
+    /// </para>
     /// </summary>
     public GuardMode Mode { get; set; } = GuardMode.Audit;
 
