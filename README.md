@@ -492,13 +492,25 @@ Things to know:
 
 ## Alerts
 
-Every violation goes to all registered `IViolationSink` services. The default sink writes a log warning.
+Every violation goes to all registered `IViolationSink` services. The default sink writes a log warning:
+
+```
+BehaviorLock violation (blocked): endpoint 'GET /products' attempted 'sql: SELECT * FROM Users' in request 0HNG5V2L8QK3T:00000002
+```
+
+The id at the end is `HttpContext.TraceIdentifier`. ASP.NET Core adds the same id as `RequestId` to the log
+scope of the request. So when a user got a 403, search the log for the id of that request to see why.
+A violation in a [background job](#background-jobs) has no request and no id.
+
 Add your own sink to send alerts to another system:
 
 ```csharp
 public sealed class PagerSink : IViolationSink
 {
-    public void Report(GuardViolation violation) { /* violation.Endpoint, violation.Access, violation.Blocked */ }
+    public void Report(GuardViolation violation)
+    {
+        // violation.Endpoint, violation.Access, violation.Blocked, violation.RequestId
+    }
 }
 
 builder.Services.AddSingleton<IViolationSink, PagerSink>();

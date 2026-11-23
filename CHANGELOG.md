@@ -18,11 +18,15 @@ profile file. Each such change is listed under **Changed** or **Removed**.
   too. So a limit that blocks legal requests can be turned into a report, while everything else stays blocked.
 - **Metrics.** The counter `behaviorlock.violations` of the meter `BehaviorLock` counts every violation, with
   the endpoint, the kind of the access and whether it was blocked.
+- **Request id.** `GuardViolation.RequestId` and the log line of a violation have the id of the request,
+  `HttpContext.TraceIdentifier`. So the reason for a 403 can be found from the request.
 - `AddBehaviorLock(configuration)` binds the options to a configuration section and follows its reloads.
   The quick start uses it now.
 
 ### Changed
 
+- `GuardViolation` has the new property `RequestId`. It is part of the equality of the record, so two
+  violations of two requests are no longer equal.
 - The approved file is also read when the app starts in `Off` mode, so that it is there when the mode changes.
 - The mode is worked out for each access and no longer once per request. A change of the global mode also
   reaches a request or a scope that is already running.

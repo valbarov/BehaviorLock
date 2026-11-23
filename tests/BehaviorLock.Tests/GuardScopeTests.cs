@@ -61,7 +61,9 @@ public sealed class GuardScopeTests : IDisposable
         guard.Check(Known);
         var exception = Assert.Throws<GuardViolationException>(() => guard.Check(Unknown));
 
+        // A scope has no request, so the violation has no request id.
         Assert.Equal(new GuardViolation(Job, Unknown, Blocked: true), exception.Violation);
+        Assert.Null(exception.Violation.RequestId);
         Assert.Equal([exception.Violation], _sink.Items);
     }
 

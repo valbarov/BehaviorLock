@@ -59,7 +59,10 @@ internal sealed class AccessGuard(
 
         // A limit can be report-only: see BehaviorLockOptions.EnforceLimits.
         var blocked = mode == GuardMode.Enforce && (access.UpTo is null || settings.EnforceLimits);
-        var violation = new GuardViolation(context.Endpoint, access.RoundedUp(), blocked);
+        var violation = new GuardViolation(context.Endpoint, access.RoundedUp(), blocked)
+        {
+            RequestId = context.RequestId,
+        };
         foreach (var sink in sinks)
         {
             sink.Report(violation);

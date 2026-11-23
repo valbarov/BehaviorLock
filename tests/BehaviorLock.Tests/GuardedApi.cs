@@ -147,9 +147,21 @@ public sealed class StubHttpHandler : HttpMessageHandler
     }
 }
 
+/// <summary>
+/// Keeps every violation. The request id is kept apart, because a test cannot know it before the request:
+/// so a test can compare <see cref="Items"/> with the violations that it expects.
+/// </summary>
 public sealed class CollectingSink : IViolationSink
 {
+    /// <summary>The violations without their request id.</summary>
     public ConcurrentQueue<GuardViolation> Items { get; } = new();
 
-    public void Report(GuardViolation violation) => Items.Enqueue(violation);
+    /// <summary>The request id of each violation, in the order of <see cref="Items"/>.</summary>
+    public ConcurrentQueue<string?> RequestIds { get; } = new();
+
+    public void Report(GuardViolation violation)
+    {
+        Items.Enqueue(violation with { RequestId = null });
+        RequestIds.Enqueue(violation.RequestId);
+    }
 }

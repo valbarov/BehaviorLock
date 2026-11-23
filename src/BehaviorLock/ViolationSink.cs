@@ -14,10 +14,27 @@ public interface IViolationSink
 
 internal sealed class LoggingViolationSink(ILogger<LoggingViolationSink> logger) : IViolationSink
 {
-    public void Report(GuardViolation violation) =>
+    public void Report(GuardViolation violation)
+    {
+        var action = violation.Blocked ? "blocked" : "audit only";
+
+        // A guard scope has no request.
+        if (violation.RequestId is null)
+        {
+            logger.LogWarning(
+                "BehaviorLock violation ({Action}): endpoint '{Endpoint}' attempted '{Access}'",
+                action,
+                violation.Endpoint,
+                violation.Access);
+            return;
+        }
+
+        // With the id, support can find the line for a user who got a 403.
         logger.LogWarning(
-            "BehaviorLock violation ({Action}): endpoint '{Endpoint}' attempted '{Access}'",
-            violation.Blocked ? "blocked" : "audit only",
+            "BehaviorLock violation ({Action}): endpoint '{Endpoint}' attempted '{Access}' in request {RequestId}",
+            action,
             violation.Endpoint,
-            violation.Access);
+            violation.Access,
+            violation.RequestId);
+    }
 }

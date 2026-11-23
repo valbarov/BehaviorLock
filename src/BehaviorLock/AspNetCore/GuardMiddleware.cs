@@ -42,7 +42,7 @@ internal sealed class GuardMiddleware(
         }
 
         var endpoint = EndpointKey.Create(http.Request.Method, routeEndpoint);
-        var context = new GuardContext(endpoint, ownMode);
+        var context = new GuardContext(endpoint, ownMode) { RequestId = http.TraceIdentifier };
         contextAccessor.Current = context;
 
         if (mode == GuardMode.Learn)
