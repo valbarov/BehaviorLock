@@ -24,6 +24,7 @@ namespace BehaviorLock;
 /// </summary>
 internal sealed class GuardHttpDiagnostics(
     IAccessGuard guard,
+    GlobalMode globalMode,
     IOptions<BehaviorLockOptions> options,
     ILogger<GuardHttpDiagnostics> logger)
     : IHostedService, IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>, IDisposable
@@ -44,28 +45,46 @@ internal sealed class GuardHttpDiagnostics(
     private IDisposable? _httpListener;
     private PropertyInfo? _requestProperty;
     private bool _cannotRead;
+    private bool _stopped;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!options.Value.CheckAllHttpClients || options.Value.Mode == GuardMode.Off)
+        if (!options.Value.CheckAllHttpClients)
         {
             return Task.CompletedTask;
         }
 
-        if (EventIsOff())
+        // Off mode listens to nothing. The listening starts when the mode changes while the app runs.
+        globalMode.Changed += ListenUnlessOff;
+        ListenUnlessOff(globalMode.Current);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Starts the listening once. It then goes on in every mode: in Off mode the guard is not active.</summary>
+    private void ListenUnlessOff(GuardMode mode)
+    {
+        if (mode == GuardMode.Off)
         {
-            logger.LogWarning(
-                "The .NET setting {Setting} is off, so the HTTP handlers write no event. " +
-                "BehaviorLock checks only the clients of IHttpClientFactory, and no redirect hop.",
-                PropagationSwitch);
+            return;
         }
 
         lock (_lock)
         {
-            _allListeners ??= DiagnosticListener.AllListeners.Subscribe(this);
-        }
+            if (_stopped || _allListeners is not null)
+            {
+                return;
+            }
 
-        return Task.CompletedTask;
+            if (EventIsOff())
+            {
+                logger.LogWarning(
+                    "The .NET setting {Setting} is off, so the HTTP handlers write no event. " +
+                    "BehaviorLock checks only the clients of IHttpClientFactory, and no redirect hop.",
+                    PropagationSwitch);
+            }
+
+            _allListeners = DiagnosticListener.AllListeners.Subscribe(this);
+        }
     }
 
     /// <summary>An app can turn the event off for the whole process, with a switch or an environment variable.</summary>
@@ -88,8 +107,11 @@ internal sealed class GuardHttpDiagnostics(
 
     public void Dispose()
     {
+        globalMode.Changed -= ListenUnlessOff;
+
         lock (_lock)
         {
+            _stopped = true;
             _httpListener?.Dispose();
             _allListeners?.Dispose();
             _httpListener = null;

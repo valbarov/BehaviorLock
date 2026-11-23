@@ -9,7 +9,19 @@ profile file. Each such change is listed under **Changed** or **Removed**.
 
 ## [Unreleased]
 
-No changes yet.
+### Added
+
+- **Mode change in a running app.** A change of `Mode` in the configuration applies without a restart, between
+  `Off`, `Audit` and `Enforce`. So a false positive can be stopped without a new deploy. A change that would
+  have stopped the start is refused, and each change is logged as a warning.
+- `AddBehaviorLock(configuration)` binds the options to a configuration section and follows its reloads.
+  The quick start uses it now.
+
+### Changed
+
+- The approved file is also read when the app starts in `Off` mode, so that it is there when the mode changes.
+- The mode is worked out for each access and no longer once per request. A change of the global mode also
+  reaches a request or a scope that is already running.
 
 ## [0.1.0-preview.1] - 2026-11-20
 

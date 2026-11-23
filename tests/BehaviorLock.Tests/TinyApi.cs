@@ -45,6 +45,9 @@ public sealed class TinyApi : IAsyncDisposable
     /// <summary>How often the endpoint <c>/whoami</c> ran.</summary>
     public int Calls { get; private set; }
 
+    /// <summary>Changes the mode in the configuration of the running API, like an edit of appsettings.json does.</summary>
+    public void ChangeMode(GuardMode mode) => ModeSetting.Change(_app.Configuration, mode);
+
     /// <summary>Starts the API with this content of the profile file.</summary>
     public static async Task<TinyApi> StartAsync(GuardMode mode, string profile, Action<BehaviorLockOptions>? configure = null)
     {
@@ -56,9 +59,9 @@ public sealed class TinyApi : IAsyncDisposable
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = directory });
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
-        builder.Services.AddBehaviorLock(options =>
+        ModeSetting.Add(builder.Configuration, mode);
+        builder.Services.AddBehaviorLock(builder.Configuration.GetSection(ModeSetting.Section), options =>
         {
-            options.Mode = mode;
             options.ProfilePath = profilePath;
             configure?.Invoke(options);
         });

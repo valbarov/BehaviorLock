@@ -17,7 +17,8 @@ internal sealed class ApprovedAccesses(
     {
         // Learn mode saves the profile. Approved accesses must not get into the recorded file,
         // or nobody could see later that the tests do not cover them.
-        if (options.Value.ApprovedPath is not { } path || options.Value.Mode is GuardMode.Off or GuardMode.Learn)
+        // Off mode reads the file: the mode can change to Audit or Enforce while the app runs.
+        if (options.Value.ApprovedPath is not { } path || options.Value.Mode == GuardMode.Learn)
         {
             return;
         }

@@ -79,7 +79,7 @@ using BehaviorLock;
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Register the guard. This also covers the outbound calls of every HttpClient.
-builder.Services.AddBehaviorLock(options => builder.Configuration.GetSection("BehaviorLock").Bind(options));
+builder.Services.AddBehaviorLock(builder.Configuration.GetSection("BehaviorLock"));
 
 // 2. Let the guard check the commands of your DbContext.
 builder.Services.AddDbContext<ShopDb>((services, options) => options
@@ -105,7 +105,7 @@ app.UseBehaviorLock();
 
 | Option | Default | Meaning |
 |---|---|---|
-| `Mode` | `Audit` | The global mode. See [Modes](#modes) |
+| `Mode` | `Audit` | The global mode. It can change while the app runs. See [Modes](#modes) |
 | `ProfilePath` | `behavior.lock.json` | The recorded profile. See [Deploy the profile](#deploy-the-profile) |
 | `ApprovedPath` | Not set | The file with reviewed accesses. See [Find the gaps in production](#find-the-gaps-in-production) |
 | `PendingPath` | Not set | The file where the guard writes unknown accesses. Not set means that no file is written |
@@ -133,6 +133,33 @@ file stays empty, switch to `Enforce`. You can also switch one endpoint at a tim
 See [Mode per endpoint](#mode-per-endpoint).
 
 In `Enforce` mode an endpoint that has no profile and no approved accesses cannot touch anything.
+
+### Change the mode while the app runs
+
+A false positive in `Enforce` mode blocks a legal request. You can stop the blocking without a new deploy:
+change `Mode` in the configuration of the running app, for example in `appsettings.json`.
+
+```json
+"BehaviorLock": {
+  "Mode": "Audit"
+}
+```
+
+- Register the guard with `AddBehaviorLock(configuration)`, as in the quick start. The guard then follows each
+  reload of that configuration. ASP.NET Core reloads `appsettings.json` when the file changes. It reads
+  environment variables only at the start.
+- The change applies to the next access, also in a request or a background scope that is already running.
+- Only `Off`, `Audit` and `Enforce` can change into each other. `Learn` must be set at the start, and an app in
+  `Learn` mode stays there until it stops.
+- A change that would have stopped the start is refused, for example `Enforce` without a profile. The mode
+  stays as it is, and the log has an error with the reason.
+- `Audit` does not change an endpoint that has its own mode `Enforce`. `Off` turns the guard off for every
+  endpoint. See [Mode per endpoint](#mode-per-endpoint).
+- Each change is logged as a warning, for example `BehaviorLock mode changed from Enforce to Audit`. Look for
+  this line after you change the file. A value that is not a mode changes nothing and gives no such line.
+- Every other option is read once, at the start.
+
+Who can write the configuration can turn the guard off. Protect it like the files of the app.
 
 ## Mode per endpoint
 

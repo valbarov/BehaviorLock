@@ -152,6 +152,40 @@ public sealed class GuardScopeTests : IDisposable
     }
 
     [Fact]
+    public void A_change_of_the_global_mode_reaches_a_scope_that_is_already_open()
+    {
+        // A job can keep one scope open for hours. The kill switch must not wait for its end.
+        var mode = new GlobalMode(GuardMode.Enforce);
+        var guard = Guard(mode);
+
+        using var scope = new GuardScopes(_accessor, _profile, mode).Begin(Job);
+        Assert.Throws<GuardViolationException>(() => guard.Check(Unknown));
+
+        mode.Change(GuardMode.Audit);
+        guard.Check(Unknown);
+
+        mode.Change(GuardMode.Off);
+        guard.Check(Unknown);
+
+        Assert.False(guard.IsActive);
+        Assert.Equal(
+            [new GuardViolation(Job, Unknown, Blocked: true), new GuardViolation(Job, Unknown, Blocked: false)],
+            _sink.Items);
+    }
+
+    [Fact]
+    public void A_scope_keeps_its_own_mode_when_the_global_mode_changes_to_audit()
+    {
+        var mode = new GlobalMode(GuardMode.Enforce);
+        var guard = Guard(mode);
+
+        using var scope = new GuardScopes(_accessor, _profile, mode).Begin(Job, GuardMode.Enforce);
+        mode.Change(GuardMode.Audit);
+
+        Assert.Throws<GuardViolationException>(() => guard.Check(Unknown));
+    }
+
+    [Fact]
     public void Learn_is_not_legal_as_the_mode_of_a_scope()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => Scopes(GuardMode.Enforce).Begin(Job, GuardMode.Learn));
@@ -196,10 +230,10 @@ public sealed class GuardScopeTests : IDisposable
         await work(services.ServiceProvider.GetRequiredService<SampleApi.ShopDb>());
     }
 
-    private GuardScopes Scopes(GuardMode mode) => new(_accessor, _profile, OptionsOf(mode));
+    private GuardScopes Scopes(GuardMode mode) => new(_accessor, _profile, new GlobalMode(mode));
 
-    private AccessGuard Guard(GuardMode mode) => new(_accessor, _profile, [_sink], OptionsOf(mode));
+    private AccessGuard Guard(GuardMode mode) => Guard(new GlobalMode(mode));
 
-    private static IOptions<BehaviorLockOptions> OptionsOf(GuardMode mode) =>
-        Options.Create(new BehaviorLockOptions { Mode = mode });
+    private AccessGuard Guard(GlobalMode mode) =>
+        new(_accessor, _profile, [_sink], mode, Options.Create(new BehaviorLockOptions()));
 }

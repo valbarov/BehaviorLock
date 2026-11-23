@@ -21,11 +21,12 @@ public sealed class ModeTestApi : IAsyncDisposable
     private readonly string _directory;
     private readonly WebApplication _app;
 
-    private ModeTestApi(string directory, WebApplication app, CollectingSink violations)
+    private ModeTestApi(string directory, WebApplication app, CollectingSink violations, CollectingLogs logs)
     {
         _directory = directory;
         _app = app;
         Violations = violations;
+        Logs = logs;
         Client = app.GetTestClient();
     }
 
@@ -33,10 +34,20 @@ public sealed class ModeTestApi : IAsyncDisposable
 
     public CollectingSink Violations { get; }
 
+    /// <summary>The log lines of the guard.</summary>
+    public CollectingLogs Logs { get; }
+
+    /// <summary>The global mode that the guard uses now.</summary>
+    public GuardMode Mode => _app.Services.GetRequiredService<GlobalMode>().Current;
+
     public EndpointProfile LoadedProfile => _app.Services.GetRequiredService<EndpointProfile>();
 
+    /// <summary>Changes the mode in the configuration of the running API, like an edit of appsettings.json does.</summary>
+    public void ChangeMode(GuardMode mode) => ModeSetting.Change(_app.Configuration, mode);
+
     /// <summary>Starts the API. Without a profile, no profile file is written.</summary>
-    public static async Task<ModeTestApi> StartAsync(GuardMode global, bool withProfile = true)
+    public static async Task<ModeTestApi> StartAsync(
+        GuardMode global, bool withProfile = true, Action<IServiceCollection>? services = null)
     {
         var directory = Directory.CreateTempSubdirectory("behaviorlock-").FullName;
         var profilePath = Path.Combine(directory, "behavior.lock.json");
@@ -46,16 +57,17 @@ public sealed class ModeTestApi : IAsyncDisposable
         }
 
         var violations = new CollectingSink();
+        var logs = new CollectingLogs();
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = directory });
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
-        builder.Services.AddBehaviorLock(options =>
-        {
-            options.Mode = global;
-            options.ProfilePath = profilePath;
-        });
+        builder.Logging.AddProvider(logs);
+        ModeSetting.Add(builder.Configuration, global);
+        builder.Services.AddBehaviorLock(
+            builder.Configuration.GetSection(ModeSetting.Section), options => options.ProfilePath = profilePath);
         builder.Services.AddSingleton<IViolationSink>(violations);
         builder.Services.AddControllers().AddApplicationPart(typeof(ModeTestController).Assembly);
+        services?.Invoke(builder.Services);
 
         var app = builder.Build();
         app.UseBehaviorLock();
@@ -83,7 +95,7 @@ public sealed class ModeTestApi : IAsyncDisposable
             throw;
         }
 
-        return new ModeTestApi(directory, app, violations);
+        return new ModeTestApi(directory, app, violations, logs);
     }
 
     /// <summary>Makes one access that is not in the profile. Returns true when the guard was active.</summary>

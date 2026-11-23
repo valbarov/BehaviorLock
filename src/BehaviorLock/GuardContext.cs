@@ -3,7 +3,7 @@ namespace BehaviorLock;
 /// <summary>State of the request that is being guarded.</summary>
 internal sealed class GuardContext(string endpoint, GuardMode? mode)
 {
-    /// <summary>A context that uses the global mode.</summary>
+    /// <summary>A context without a mode of its own.</summary>
     public GuardContext(string endpoint)
         : this(endpoint, null)
     {
@@ -13,8 +13,8 @@ internal sealed class GuardContext(string endpoint, GuardMode? mode)
     public string Endpoint { get; } = endpoint;
 
     /// <summary>
-    /// The mode for this request, after the mode of the endpoint was applied. See <see cref="GuardModes.Effective"/>.
-    /// Null means that the global mode applies.
+    /// The own mode of the endpoint or scope. Null means that it has none, so the global mode applies.
+    /// The guard puts this mode and the global mode together for each access; see <see cref="GuardModes.Effective"/>.
     /// </summary>
     public GuardMode? Mode { get; } = mode;
 

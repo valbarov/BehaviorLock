@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Options;
-
 namespace BehaviorLock;
 
 /// <summary>
@@ -11,15 +9,14 @@ public sealed class GuardScopes
 {
     private readonly IGuardContextAccessor contextAccessor;
     private readonly EndpointProfile profile;
-    private readonly IOptions<BehaviorLockOptions> options;
+    private readonly GlobalMode globalMode;
 
     // The guard creates the one instance. Get it from the services of the app.
-    internal GuardScopes(
-        IGuardContextAccessor contextAccessor, EndpointProfile profile, IOptions<BehaviorLockOptions> options)
+    internal GuardScopes(IGuardContextAccessor contextAccessor, EndpointProfile profile, GlobalMode globalMode)
     {
         this.contextAccessor = contextAccessor;
         this.profile = profile;
-        this.options = options;
+        this.globalMode = globalMode;
     }
 
     /// <summary>
@@ -39,7 +36,8 @@ public sealed class GuardScopes
     /// </param>
     /// <param name="mode">
     /// The mode of this scope: Off, Audit or Enforce. Null means the global mode. The global modes Off and
-    /// Learn apply to every scope, like to every endpoint.
+    /// Learn apply to every scope, like to every endpoint. A change of the global mode while the app runs
+    /// also applies to a scope that is already open.
     /// </param>
     /// <exception cref="ArgumentOutOfRangeException">The mode is Learn.</exception>
     public IDisposable Begin(string name, GuardMode? mode = null)
@@ -50,14 +48,13 @@ public sealed class GuardScopes
             GuardModes.RequireEndpointMode(own, nameof(mode));
         }
 
-        var effective = GuardModes.Effective(options.Value.Mode, mode);
-        if (effective == GuardMode.Learn)
+        if (globalMode.Current == GuardMode.Learn)
         {
             profile.AddEndpoint(name);
         }
 
         var scope = new Scope(contextAccessor, contextAccessor.Current);
-        contextAccessor.Current = new GuardContext(name, effective);
+        contextAccessor.Current = new GuardContext(name, mode);
         return scope;
     }
 

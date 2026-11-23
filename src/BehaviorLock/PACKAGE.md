@@ -40,7 +40,7 @@ using BehaviorLock;
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Register the guard. This also covers the outbound calls of every HttpClient.
-builder.Services.AddBehaviorLock(options => builder.Configuration.GetSection("BehaviorLock").Bind(options));
+builder.Services.AddBehaviorLock(builder.Configuration.GetSection("BehaviorLock"));
 
 // 2. Let the guard check the commands of your DbContext.
 builder.Services.AddDbContext<ShopDb>((services, options) => options

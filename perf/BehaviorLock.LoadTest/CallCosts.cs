@@ -23,7 +23,8 @@ public static class CallCosts
         var profile = new EndpointProfile();
         profile.Allow("GET /products/{id:int}", access);
         var accessor = new GuardContextAccessor { Current = new GuardContext("GET /products/{id:int}") };
-        var guard = new AccessGuard(accessor, profile, [], Options.Create(new BehaviorLockOptions { Mode = GuardMode.Enforce }));
+        var guard = new AccessGuard(
+            accessor, profile, [], new GlobalMode(GuardMode.Enforce), Options.Create(new BehaviorLockOptions()));
 
         Console.WriteLine("## Cost per call (one thread, no HTTP, no database)");
         Console.WriteLine();
