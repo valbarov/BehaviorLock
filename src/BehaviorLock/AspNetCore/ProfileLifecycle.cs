@@ -9,6 +9,7 @@ namespace BehaviorLock;
 /// <summary>
 /// Logs the guard state on start. Stops the start when Enforce mode has no profile,
 /// or a profile that was recorded with another database provider.
+/// Names the endpoints that the profile does not have, so that the gap is seen before the first 403.
 /// Saves the profile on shutdown in Learn mode.
 /// <para>
 /// It also follows <see cref="BehaviorLockOptions.Mode"/> while the app runs, so that a change of the
@@ -40,6 +41,9 @@ internal sealed class ProfileLifecycle(
 
     // The options of the last change that came before the app had started.
     private BehaviorLockOptions? _early;
+
+    // The endpoints without a profile are named once: at the start, or when the mode leaves Off.
+    private bool _coverageLogged;
 
     // The mode of the last refused change. One change of a file can come more than once, and is logged once.
     private GuardMode? _refused;
@@ -93,6 +97,7 @@ internal sealed class ProfileLifecycle(
         lock (_changeLock)
         {
             _started = true;
+            WarnAboutUnprofiledEndpoints(settings.Mode);
             if (_early is { } changed)
             {
                 Apply(changed);
@@ -212,6 +217,7 @@ internal sealed class ProfileLifecycle(
         // A change of the mode changes what an attacker can do, so it must be easy to find in the log.
         logger.LogWarning("BehaviorLock mode changed from {Old} to {New}", current, wanted);
         WarnAboutEmptyProfile(wanted);
+        WarnAboutUnprofiledEndpoints(wanted);
     }
 
     /// <summary>Returns why the mode cannot change, or null when it can.</summary>
@@ -252,6 +258,36 @@ internal sealed class ProfileLifecycle(
         {
             logger.LogWarning("BehaviorLock mode is Audit, but {Problem}", _problem);
         }
+    }
+
+    /// <summary>
+    /// The endpoints are known only when the server has built the request pipeline, so this runs after
+    /// the start. Off and Learn mode check nothing, and an empty profile has a message of its own.
+    /// An endpoint with the mode Off is never checked, so it needs no profile.
+    /// </summary>
+    private void WarnAboutUnprofiledEndpoints(GuardMode mode)
+    {
+        if (_coverageLogged || mode is not (GuardMode.Audit or GuardMode.Enforce) || profile.EndpointCount == 0)
+        {
+            return;
+        }
+
+        _coverageLogged = true;
+
+        var unprofiled = EndpointCoverage.FindUnprofiled(
+            endpointSources.SelectMany(source => source.Endpoints), profile, withModeOff: false);
+        if (unprofiled.Count == 0)
+        {
+            return;
+        }
+
+        logger.LogWarning(
+            "BehaviorLock: the profile at {Location} does not have {Count} of the endpoints of the app: {Endpoints}. " +
+            "Enforce mode blocks every SQL command and every outbound call of such an endpoint. " +
+            "Add a legal request for each of them to the recording",
+            store.Location,
+            unprofiled.Count,
+            EndpointCoverage.Describe(unprofiled));
     }
 
     /// <summary>

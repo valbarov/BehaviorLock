@@ -52,7 +52,7 @@ public sealed class LimitReloadTests
 
         Assert.Equal(
             ["BehaviorLock EnforceLimits changed from True to False", "BehaviorLock EnforceLimits changed from False to True"],
-            api.Logs.Warnings);
+            api.Logs.Warnings.Where(warning => warning.Contains("EnforceLimits")));
         Assert.Empty(api.Logs.Errors);
     }
 
