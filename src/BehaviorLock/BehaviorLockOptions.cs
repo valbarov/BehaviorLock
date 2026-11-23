@@ -40,6 +40,11 @@ public sealed class BehaviorLockOptions
     /// Path of the pending file, or null to write none. The guard writes every access that is not in the
     /// profile to this file, in the format of the profile. A person reviews the file and moves the legal
     /// accesses to the approved file. A relative path is resolved like <see cref="ProfilePath"/>.
+    /// <para>
+    /// The path can have the placeholders <c>{machine}</c>, for the name of the machine, and <c>{pid}</c>,
+    /// for the id of the process. Use them when several instances of the app write to one directory:
+    /// each instance needs its own file. In a container the name of the machine is the name of the container.
+    /// </para>
     /// </summary>
     public string? PendingPath { get; set; }
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -25,9 +26,21 @@ internal sealed class PendingAccesses(
     private bool _limitReported;
     private bool _writeFailureReported;
 
-    /// <summary>The full path of the pending file, or null when no pending file is written.</summary>
+    /// <summary>
+    /// The full path of the pending file, with the values in place of the placeholders.
+    /// Null when no pending file is written.
+    /// </summary>
     public string? Location { get; } =
-        options.Value.PendingPath is { } path ? ProfileFile.Resolve(path, environment) : null;
+        options.Value.PendingPath is { } path ? ProfileFile.Resolve(Expand(path), environment) : null;
+
+    /// <summary>
+    /// Puts the name of the machine in place of <c>{machine}</c> and the id of the process in place of
+    /// <c>{pid}</c>. So the instances of an app that share one directory do not write the same file.
+    /// Upper and lower case are the same. Every other text stays, also other braces.
+    /// </summary>
+    internal static string Expand(string path) => path
+        .Replace("{machine}", Environment.MachineName, StringComparison.OrdinalIgnoreCase)
+        .Replace("{pid}", Environment.ProcessId.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
 
     public void Report(GuardViolation violation)
     {
