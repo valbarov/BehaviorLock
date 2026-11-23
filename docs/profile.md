@@ -23,6 +23,67 @@ BehaviorLock: the profile at /app/behavior.lock.json does not have 2 of the endp
 One request per endpoint is not enough. Each legal path that touches different resources needs its own
 request. For example, `GET /products?sort=Price` and `GET /products?sort=Name` give two SQL shapes.
 
+## Check the profile in CI
+
+The diff of the profile is only worth a review when the committed profile is the one that the code gives.
+So let CI record the profile again, and fail the build when the result is not the committed file. Then no
+pull request can change what an endpoint touches without a change of `behavior.lock.json` in the same
+pull request.
+
+For GitHub Actions:
+
+```yaml
+steps:
+  - uses: actions/checkout@v7
+
+  - uses: actions/setup-dotnet@v6
+    with:
+      dotnet-version: 11.0.x
+
+  # The tests record the profile again.
+  - name: Test
+    run: dotnet test
+
+  - name: The recorded profile is the committed profile
+    shell: bash
+    run: |
+      profile=src/Shop.Api/behavior.lock.json
+
+      if ! git ls-files --error-unmatch -- "$profile" > /dev/null 2>&1; then
+        echo "::error::The profile $profile is not committed."
+        exit 1
+      fi
+
+      if ! git diff --exit-code -- "$profile"; then
+        echo "::error::The tests recorded another profile than the committed one. Review the change above. Then commit the new profile, or correct the code."
+        exit 1
+      fi
+```
+
+The check is plain git, so the same two commands work on every CI system.
+
+When the check fails, run the tests on your machine and look at `git diff`. The change is either legal, then
+commit the new profile and the reviewer sees it. Or it is a mistake, then correct the code.
+
+Things to know:
+
+- **The recording must start without the old profile.** `Learn` mode adds to a profile that is there. So
+  delete the file before the recording, as
+  [`ProfileFixture`](../tests/BehaviorLock.Tests/ProfileFixture.cs) does. Else an access that the code
+  no longer makes stays in the profile, and the check cannot see it.
+- **Tell git that the profile is text.** The guard writes the file with the line ends of the system. Add
+  the line `behavior.lock.json text` to `.gitattributes`, or use `* text=auto`. Without it, a profile that
+  was committed on Windows is another file for git than the same profile from a Linux build.
+- **The recording must give the same profile each time.** Use fixed test data. The limits help here: the
+  profile keeps them rounded up to 10, 100, 1000 and so on.
+- **A new version of the database provider changes the profile.** The `$database` entry has the version, and
+  the SQL can change too. The check then fails, and that is wanted: record again and commit.
+- **Record with one target framework.** A test project with several target frameworks runs once for each,
+  and each run can use another provider version. Let only one of them write the committed file.
+
+This repository uses the same check for the profile of the sample; see
+[ci.yml](../.github/workflows/ci.yml).
+
 ## Deploy the profile
 
 The profile file must be deployed with the app. A relative `ProfilePath` is resolved against the content

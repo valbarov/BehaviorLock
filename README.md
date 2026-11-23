@@ -173,6 +173,9 @@ The test writes `behavior.lock.json` into the project folder of the app. Two thi
 Commit `behavior.lock.json`. From now on, a pull request that makes an endpoint read a new table, call a new
 host or take a new kind of caller also changes this file. The reviewer sees it in the diff.
 
+Let CI fail when the committed profile is not the one that the tests record. Then nobody can forget to commit
+the change. See [Check the profile in CI](docs/profile.md#check-the-profile-in-ci).
+
 ### 4. Deploy and watch
 
 A web project publishes the JSON files of its folder, so the profile goes out with the app. In production,
@@ -193,7 +196,7 @@ review what the tests missed.
 | [Options](docs/options.md) | Every option with its default |
 | [Modes](docs/modes.md) | `Off`, `Learn`, `Audit` and `Enforce`, a change of the mode while the app runs, and a mode per endpoint |
 | [What the guard checks](docs/checks.md) | Outbound calls, callers, limits, SQL dialects and background jobs |
-| [The profile](docs/profile.md) | How to record it from tests, deploy it, and find the gaps in production with the pending file and the approved file |
+| [The profile](docs/profile.md) | How to record it from tests, check it in CI, deploy it, and find the gaps in production with the pending file and the approved file |
 | [Alerts and metrics](docs/monitoring.md) | The log line of a violation, a sink of your own, and the counter for a dashboard |
 | [Known limits](docs/known-limits.md) | What the guard does not cover. Read it before you use the package |
 | [Extension points](docs/extension-points.md) | The interfaces that you can replace |
